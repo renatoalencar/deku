@@ -1,14 +1,24 @@
 (executable
  (name deku_node)
  (public_name deku-node)
- (libraries opium files node helpers cmdliner)
+ (libraries opium files node cli_helpers helpers cmdliner logs logs.fmt)
  (modules Deku_node)
  (preprocess
   (pps ppx_deriving.show ppx_deriving_yojson)))
 
 (executable
  (name sidecli)
- (libraries node files helpers cmdliner)
+ (libraries
+  node
+  files
+  cli_helpers
+  helpers
+  cmdliner
+  logs
+  logs.fmt
+  fmt.cli
+  logs.cli
+  fmt.tty)
  (modules Sidecli)
  (public_name sidecli)
  (preprocess
@@ -20,3 +30,8 @@
  (libraries lwt lwt.unix node)
  (preprocess
   (pps ppx_deriving_yojson)))
+
+(library
+ (name cli_helpers)
+ (modules Cli_helpers)
+ (libraries logs logs.fmt fmt.cli logs.cli fmt.tty cmdliner))

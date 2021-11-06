@@ -310,7 +310,7 @@ let node = {
     Arg.(required & pos(0, some(string), None) & info([], ~doc, ~docv));
   };
 
-  Term.(const(node) $ folder_node);
+  Term.(Cli_helpers.const_log(node) $ folder_node);
 };
 
 let () = {

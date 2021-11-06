@@ -1,4 +1,5 @@
 open Helpers;
+open Cli_helpers;
 open Crypto;
 open Node;
 open State;
@@ -162,7 +163,7 @@ let create_wallet = () => {
   await(`Ok());
 };
 
-let create_wallet = Term.(lwt_ret(const(create_wallet) $ const()));
+let create_wallet = Term.(lwt_ret(const_log(create_wallet) $ const()));
 
 // create-transaction
 
@@ -348,7 +349,7 @@ let withdraw = {
 
   Term.(
     lwt_ret(
-      const(withdraw)
+      const_log(withdraw)
       $ folder_node
       $ address_from
       $ tezos_address
@@ -470,7 +471,7 @@ let sign_block_term = {
     Arg.(required & pos(1, some(hash), None) & info([], ~doc));
   };
 
-  Term.(lwt_ret(const(sign_block) $ folder_node $ block_hash));
+  Term.(lwt_ret(const_log(sign_block) $ folder_node $ block_hash));
 };
 
 // produce-block
@@ -511,7 +512,7 @@ let produce_block = {
     Arg.(required & pos(0, some(string), None) & info([], ~doc, ~docv));
   };
 
-  Term.(lwt_ret(const(produce_block) $ folder_node));
+  Term.(lwt_ret(const_log(produce_block) $ folder_node));
 };
 
 let ensure_folder = folder => {
@@ -615,7 +616,7 @@ let setup_tezos = {
 
   Term.(
     lwt_ret(
-      const(setup_tezos)
+      const_log(setup_tezos)
       $ folder_dest
       $ tezos_node_uri
       $ tezos_secret

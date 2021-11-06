@@ -272,6 +272,14 @@ module Run_contract = {
       entrypoint,
       payload,
     };
+    let () =
+      Logs.debug(m =>
+        m(
+          "Calling run_entrypoint.js with argument %s",
+          Yojson.Safe.to_string(input_to_yojson(input)),
+        )
+      );
+
     // TODO: stop hard coding this
     let command = "node";
     let.await output =
@@ -413,7 +421,7 @@ module Listen_transactions = {
         Lwt.catch(
           () => {
             let.await line = Lwt_io.read_line(process#stdout);
-            print_endline(line);
+            Logs.app(m => m("%s", line));
             Yojson.Safe.from_string(line)
             |> output_of_yojson
             |> Result.get_ok
