@@ -9,10 +9,6 @@ module Consensus: {
   let sign: (Secret.t, t) => Signature.t;
   let verify: (Key.t, Signature.t, t) => bool;
 };
-module Core_tezos: {
-  [@deriving (eq, ord, yojson)]
-  type t = Core.Tezos_operation.t;
-};
 module Core_user: {
   [@deriving (eq, ord, yojson)]
   type t =
@@ -47,6 +43,5 @@ module Core_user: {
 };
 [@deriving (eq, ord, yojson)]
 type t =
-  | Core_tezos(Core.Tezos_operation.t)
   | Core_user(Core_user.t)
   | Consensus(Consensus.t);

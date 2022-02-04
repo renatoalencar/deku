@@ -44,7 +44,10 @@ async function runTransaction({
   const signer = await InMemorySigner.fromSecretKey(secret);
   Tezos.setProvider({ signer });
   const contract = await Tezos.contract.at(destination);
-  const operation = await contract.methods[entrypoint](...args).send();
+  console.log(`entrypoint: ${entrypoint} args: ${args.toString()}`);
+  console.log("-------------------------------");
+  console.log(`methods: ${Object.keys(contract.methods)}`);
+  const operation = await contract.methods.default(...args).send();
   await operation.confirmation(confirmation);
 
   return { status: operation.status, hash: operation.hash };
@@ -63,7 +66,7 @@ async function run() {
       taquitoToChain.write(result_str);
     } catch (error) {
       console.error(error);
-      taquitoToChain.write("taquito error");
+      taquitoToChain.write('"taquito error"');
     }
   }
 }

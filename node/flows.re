@@ -237,7 +237,6 @@ let try_to_commit_state_hash = (~prev_validators, state, block, signatures) => {
       state,
       ~block_height=block.block_height,
       ~block_payload_hash=block.payload_hash,
-      ~handles_hash=block.handles_hash,
       ~state_hash=block.state_root_hash,
       ~validators,
       ~signatures,
@@ -398,43 +397,6 @@ let received_signature = (state, update_state, ~hash, ~signature) => {
   };
 };
 
-let parse_internal_tezos_transaction = transaction =>
-  switch (transaction) {
-  | Tezos_interop.Consensus.Update_root_hash(_) => Error(`Update_root_hash)
-  | Tezos_interop.Consensus.Deposit({ticket, amount, destination}) =>
-    let amount = Core.Amount.of_int(Z.to_int(amount));
-    Ok(Core.Tezos_operation.Tezos_deposit({destination, amount, ticket}));
-  };
-let parse_internal_tezos_transactions = tezos_internal_transactions =>
-  List.filter_map(
-    transaction =>
-      switch (parse_internal_tezos_transaction(transaction)) {
-      | Ok(core_tezos_internal_transactions) =>
-        Some(core_tezos_internal_transactions)
-      | Error(`Update_root_hash) => None
-      },
-    tezos_internal_transactions,
-  );
-
-let received_tezos_operation = (state, update_state, tezos_interop_operation) => {
-  open Protocol.Operation;
-  let Tezos_interop.Consensus.{hash, transactions} = tezos_interop_operation;
-  let tezos_operation =
-    Core.Tezos_operation.make({
-      tezos_operation_hash: hash,
-      internal_operations: parse_internal_tezos_transactions(transactions),
-    });
-
-  let operation = Core_tezos(tezos_operation);
-  let _: State.t =
-    update_state(
-      Node.{
-        ...state,
-        pending_operations: [operation, ...state.pending_operations],
-      },
-    );
-  ();
-};
 let received_user_operation = (state, update_state, user_operation) => {
   open Protocol.Operation;
   let operation = Core_user(user_operation);
@@ -520,33 +482,6 @@ let register_uri = (state, update_state, ~uri, ~signature) => {
     });
   Ok();
 };
-let request_withdraw_proof = (state, ~hash) =>
-  switch (state.Node.recent_operation_receipts |> BLAKE2B.Map.find_opt(hash)) {
-  | None => Networking.Withdraw_proof.Unknown_operation
-  | Some(Receipt_tezos_withdraw(handle)) =>
-    let last_block_hash = state.Node.protocol.last_block_hash;
-    /* TODO: possible problem with this solution
-       if this specific handles_hash was never commited to Tezos
-       then the withdraw will fail at Tezos */
-    let handles_hash =
-      switch (
-        Block_pool.find_block(~hash=last_block_hash, state.Node.block_pool)
-      ) {
-      // this branch is unreachable
-      // TODO: make this unreachable through the typesystem
-      | None => assert(false)
-      | Some(block) => block.Block.handles_hash
-      };
-    let proof =
-      state.Node.protocol.core_state
-      |> Core.State.ledger
-      |> Ledger.handles_find_proof(handle);
-    Ok({handles_hash, handle, proof});
-  };
-let request_ticket_balance = (state, ~ticket, ~address) =>
-  state.Node.protocol.core_state
-  |> Core.State.ledger
-  |> Ledger.balance(address, ticket);
 
 let trusted_validators_membership = (state, update_state, request) => {
   open Networking.Trusted_validators_membership_change;

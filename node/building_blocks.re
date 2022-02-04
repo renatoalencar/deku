@@ -105,12 +105,7 @@ let is_signable = (state, block) => {
 
   let is_trusted_operation = operation =>
     switch (operation) {
-    | Protocol.Operation.Core_tezos(_) =>
-      List.exists(
-        op => Protocol.Operation.equal(op, operation),
-        state.pending_operations,
-      )
-    | Core_user(_) => true
+    | Operation.Core_user(_) => true
     | Consensus(consensus_operation) =>
       current_time > next_allowed_membership_change_timestamp
       && (
@@ -231,8 +226,7 @@ let clean = (state, update_state, block) => {
     List.fold_left(
       (trusted_validator_membership_change, operation) =>
         switch (operation) {
-        | Operation.Core_tezos(_)
-        | Core_user(_) => trusted_validator_membership_change
+        | Operation.Core_user(_) => trusted_validator_membership_change
         | Consensus(Add_validator(validator)) =>
           Trusted_validators_membership_change.Set.remove(
             {address: validator.address, action: Add},

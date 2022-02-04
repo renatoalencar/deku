@@ -13,7 +13,6 @@ type t = {
   // sha256(json of all fields including payload hash)
   payload_hash: BLAKE2B.t,
   state_root_hash: BLAKE2B.t,
-  handles_hash: BLAKE2B.t,
   validators_hash: BLAKE2B.t,
   previous_hash: BLAKE2B.t,
   // block data
@@ -32,7 +31,6 @@ let (hash, verify) = {
       (
         f,
         ~state_root_hash,
-        ~handles_hash,
         ~validators_hash,
         ~previous_hash,
         ~author,
@@ -41,7 +39,6 @@ let (hash, verify) = {
       ) => {
     let to_yojson = [%to_yojson:
       (
-        BLAKE2B.t,
         BLAKE2B.t,
         BLAKE2B.t,
         BLAKE2B.t,
@@ -54,7 +51,6 @@ let (hash, verify) = {
     let json =
       to_yojson((
         state_root_hash,
-        handles_hash,
         validators_hash,
         previous_hash,
         author,
@@ -71,7 +67,6 @@ let (hash, verify) = {
         ~block_height,
         ~block_payload_hash,
         ~state_root_hash,
-        ~handles_hash,
         ~validators_hash,
       );
     /*
@@ -92,7 +87,6 @@ let (hash, verify) = {
 let make =
     (
       ~state_root_hash,
-      ~handles_hash,
       ~validators_hash,
       ~previous_hash,
       ~author,
@@ -102,7 +96,6 @@ let make =
   let (hash, payload_hash) =
     hash(
       ~state_root_hash,
-      ~handles_hash,
       ~validators_hash,
       ~previous_hash,
       ~author,
@@ -115,7 +108,6 @@ let make =
     previous_hash,
 
     state_root_hash,
-    handles_hash,
     validators_hash,
     author,
     block_height,
@@ -129,7 +121,6 @@ let of_yojson = json => {
     verify(
       ~hash=block.hash,
       ~state_root_hash=block.state_root_hash,
-      ~handles_hash=block.handles_hash,
       ~validators_hash=block.validators_hash,
       ~previous_hash=block.previous_hash,
       ~author=block.author,
@@ -149,7 +140,6 @@ let genesis =
     // Hash: 5eda8fbfa16cbef410d16ab2ee1d29613b6ecb02e1cb919d7c3e42c830c40b28
     ~state_root_hash=BLAKE2B.hash("mayuushi"),
     // Hash: 841dac8bea2a4a8501aceb9228837d900eedd8f489ef73958f56a6ef9c7e7e49
-    ~handles_hash=BLAKE2B.hash("desu"),
     ~validators_hash=Validators.hash(Validators.empty),
     ~block_height=0L,
     ~operations=[],
@@ -165,8 +155,6 @@ let produce = (~state, ~next_state_root_hash) => {
   make(
     ~previous_hash=state.Protocol_state.last_block_hash,
     ~state_root_hash=next_state_root_hash,
-    ~handles_hash=
-      Core.State.ledger(state.core_state) |> Ledger.handles_root_hash,
     ~validators_hash=Validators.hash(state.validators),
     ~block_height=Int64.add(state.block_height, 1L),
   );

@@ -10,17 +10,11 @@ module Consensus = {
     list(List.map(key_hash, validators)) |> hash_packed_data;
   let hash = hash => bytes(BLAKE2B.to_raw_string(hash) |> Bytes.of_string);
   let hash_block =
-      (
-        ~block_height,
-        ~block_payload_hash,
-        ~state_root_hash,
-        ~handles_hash,
-        ~validators_hash,
-      ) =>
+      (~block_height, ~block_payload_hash, ~state_root_hash, ~validators_hash) =>
     pair(
       pair(
         pair(int(Z.of_int64(block_height)), hash(block_payload_hash)),
-        pair(hash(handles_hash), hash(state_root_hash)),
+        hash(state_root_hash),
       ),
       hash(validators_hash),
     )

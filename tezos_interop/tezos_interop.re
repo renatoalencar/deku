@@ -306,7 +306,6 @@ module Consensus = {
         ~block_height,
         ~block_payload_hash,
         ~state_hash,
-        ~handles_hash,
         ~validators,
         ~signatures,
       ) => {
@@ -316,7 +315,6 @@ module Consensus = {
         block_height: int64,
         block_payload_hash: BLAKE2B.t,
         signatures: list(option(string)),
-        handles_hash: BLAKE2B.t,
         state_hash: BLAKE2B.t,
         validators: list(string),
         current_validator_keys: list(option(string)),
@@ -342,7 +340,6 @@ module Consensus = {
       block_height,
       block_payload_hash,
       signatures,
-      handles_hash,
       state_hash,
       validators,
       current_validator_keys,
@@ -471,7 +468,7 @@ module Consensus = {
           Micheline.Prim(
             _,
             Michelson_v1_primitives.D_Pair,
-            [Prim(_, D_Pair, [_, Seq(_, key_hashes)], _), _, _],
+            [_, _, Seq(_, key_hashes)],
             _,
           ),
         ) => {

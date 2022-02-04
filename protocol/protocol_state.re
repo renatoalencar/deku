@@ -1,8 +1,6 @@
 open Helpers;
 open Crypto;
 
-module Tezos_operation_set =
-  Set.Make_with_yojson(Protocol_operation.Core_tezos);
 module User_operation_set =
   Set.Make_with_yojson(Protocol_operation.Core_user);
 
@@ -10,7 +8,6 @@ type t = {
   core_state: Core.State.t,
   // TODO: more efficient lookup on included_operations
   // TODO: is this part of the protocol?
-  included_tezos_operations: Tezos_operation_set.t,
   included_user_operations: User_operation_set.t,
   // consensus
   validators: Validators.t,
@@ -34,7 +31,6 @@ let hash = t => {
   let to_yojson = [%to_yojson:
     (
       Core.State.t,
-      Tezos_operation_set.t,
       User_operation_set.t,
       Validators.t,
       BLAKE2B.t,
@@ -46,7 +42,6 @@ let hash = t => {
   let json =
     to_yojson((
       t.core_state,
-      t.included_tezos_operations,
       t.included_user_operations,
       t.validators,
       t.validators_hash,

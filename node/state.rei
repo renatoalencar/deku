@@ -25,7 +25,6 @@ type t = {
   // networking
   uri_state: Uri_map.t(string),
   validators_uri: Address_map.t(Uri.t),
-  recent_operation_receipts: BLAKE2B.Map.t(Core.State.receipt),
   persist_trusted_membership_change:
     list(Trusted_validators_membership_change.t) => Lwt.t(unit),
 };

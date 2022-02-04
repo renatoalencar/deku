@@ -695,10 +695,6 @@ describe("consensus", ({test, _}) => {
           hash_exn(
             "bdd051ddb07925a0d88dc27583e38ae560aa1b4429cc93b9ec35dacdbd74ffb2",
           ),
-        ~handles_hash=
-          hash_exn(
-            "0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8",
-          ),
         ~validators_hash=
           hash_exn(
             "546d2bb2375cc919efc81a103a7ad3bd1227546b320f275e357bd9a5d5eef946",
@@ -706,7 +702,7 @@ describe("consensus", ({test, _}) => {
       );
     let hash = BLAKE2B.to_string(hash);
     expect.string(hash).toEqual(
-      "7cb600c19817b899d4c28c521dd9ebf95f688e1444afe7d0e7740bebe848b030",
+      "1a614d8147c2d781bdc6c266eabc241096c40cba65f3b3d32c4000c3e76116db",
     );
   });
   test("hash_withdraw_handle", ({expect, _}) => {

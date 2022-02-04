@@ -20,7 +20,6 @@ module Consensus: {
       ~block_height: int64,
       ~block_payload_hash: BLAKE2B.t,
       ~state_hash: BLAKE2B.t,
-      ~handles_hash: BLAKE2B.t,
       ~validators: list(Key_hash.t),
       ~signatures: list(option((Key.t, Signature.t)))
     ) =>

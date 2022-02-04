@@ -98,7 +98,6 @@ create_new_deku_environment() {
     current_block_hash = 0x;
     current_block_height = 0;
     current_state_hash = 0x;
-    current_handles_hash = 0x;
     current_validators = [
 EOF
     ## this iteration is done here just to ensure the indentation
@@ -109,11 +108,6 @@ EOF
     cat <<EOF
     ];
   };
-  vault = {
-    known_handles_hash = (Big_map.empty : vault_known_handles_hash_set);
-    used_handles = (Big_map.empty : vault_used_handle_set);
-    vault = (Big_map.empty : vault);
-  }
 }
 EOF
   )
@@ -152,23 +146,20 @@ EOF
       --tezos_secret="$SECRET_KEY" \
       --unsafe_tezos_required_confirmations 1
   done
+  echo "Tezos Contract address: $TEZOS_CONSENSUS_ADDRESS"
 }
 
 tear-down() {
-  if [[ $(docker ps | grep my-sandbox) ]]; then
-    docker kill my-sandbox
-    rm -r "$DATA_DIRECTORY"
-    echo "Stopped the sandbox and wiped all state."
-  fi
+  for i in ${VALIDATORS[@]}; do
+    FOLDER="$DATA_DIRECTORY/$i"
+    if [ -d $FOLDER ]; then
+      rm -r $FOLDER
+    fi
+  done
 }
 
 start_node() {
   tear-down
-  message "Starting sandbox"
-  docker run --rm --name my-sandbox --detach -p 20000:20000 \
-    tqtezos/flextesa:20210602 granabox start
-  sleep 3
-  message "Sandbox started"
   message "Configuring Tezos client"
   tezos-client --endpoint $RPC_NODE bootstrapped
   tezos-client --endpoint $RPC_NODE config update

@@ -3,16 +3,8 @@ open Crypto;
 
 [@deriving yojson]
 type initial_operation =
-  | Transaction({
-      destination: Address.t,
-      amount: Amount.t,
-      ticket: Ticket_id.t,
-    })
-  | Tezos_withdraw({
-      owner: Tezos.Address.t,
-      amount: Amount.t,
-      ticket: Ticket_id.t,
-    });
+  | Single_operation(string);
+
 [@deriving yojson]
 type t = {
   hash: BLAKE2B.t,

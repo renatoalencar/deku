@@ -1,16 +1,7 @@
 open Crypto;
 
 type initial_operation =
-  | Transaction({
-      destination: Address.t,
-      amount: Amount.t,
-      ticket: Ticket_id.t,
-    })
-  | Tezos_withdraw({
-      owner: Tezos.Address.t,
-      amount: Amount.t,
-      ticket: Ticket_id.t,
-    });
+  | Single_operation(string);
 
 [@deriving (eq, ord, yojson)]
 type t =

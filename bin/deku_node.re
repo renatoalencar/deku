@@ -190,33 +190,9 @@ let handle_trusted_validators_membership =
     )
   });
 
-let handle_withdraw_proof =
-  handle_request((module Networking.Withdraw_proof), (_, {operation_hash}) =>
-    Ok(
-      Flows.request_withdraw_proof(Server.get_state(), ~hash=operation_hash),
-    )
-  );
-let handle_ticket_balance =
-  handle_request(
-    (module Networking.Ticket_balance),
-    (_update_state, {ticket, address}) => {
-      let state = Server.get_state();
-      let amount = Flows.request_ticket_balance(state, ~ticket, ~address);
-      Ok({amount: amount});
-    },
-  );
-
 let node = folder => {
   let node = Node_state.get_initial_state(~folder) |> Lwt_main.run;
   Tezos_interop.Consensus.initialize_taquito(~data_folder=folder);
-  Tezos_interop.Consensus.listen_operations(
-    ~context=node.Node.State.interop_context, ~on_operation=operation =>
-    Flows.received_tezos_operation(
-      Server.get_state(),
-      update_state,
-      operation,
-    )
-  );
   let () = Node.Server.start(~initial=node);
 
   let _server =
@@ -231,8 +207,6 @@ let node = folder => {
     |> handle_register_uri
     |> handle_receive_user_operation_gossip
     |> handle_receive_consensus_operation
-    |> handle_withdraw_proof
-    |> handle_ticket_balance
     |> handle_trusted_validators_membership
     |> App.start
     |> Lwt_main.run;

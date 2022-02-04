@@ -30,9 +30,6 @@ type t = {
   // TODO: clean after nonce is used
   uri_state: Uri_map.t(string),
   validators_uri: Address_map.t(Uri.t),
-  // TODO: use proper variants in the future
-  // TODO: this also needs to be cleaned in the future
-  recent_operation_receipts: BLAKE2B.Map.t(Core.State.receipt),
   persist_trusted_membership_change:
     list(Trusted_validators_membership_change.t) => Lwt.t(unit),
 };
@@ -71,14 +68,13 @@ let make =
     // networking
     uri_state: Uri_map.empty,
     validators_uri: initial_validators_uri,
-    recent_operation_receipts: BLAKE2B.Map.empty,
     persist_trusted_membership_change,
   };
 };
 
 let apply_block = (state, block) => {
   let prev_protocol = state.protocol;
-  let.ok (protocol, receipts) = Protocol.apply_block(state.protocol, block);
+  let.ok protocol = Protocol.apply_block(state.protocol, block);
   let snapshots =
     if (Crypto.BLAKE2B.equal(
           block.state_root_hash,
@@ -94,13 +90,7 @@ let apply_block = (state, block) => {
            ~block_height=prev_protocol.block_height,
          );
     };
-  let recent_operation_receipts =
-    List.fold_left(
-      (results, (hash, receipt)) => BLAKE2B.Map.add(hash, receipt, results),
-      state.recent_operation_receipts,
-      receipts,
-    );
-  Ok({...state, protocol, recent_operation_receipts, snapshots});
+  Ok({...state, protocol, snapshots});
 };
 
 // TODO: duplicated code
@@ -167,7 +157,6 @@ let load_snapshot =
   let of_yojson = [%of_yojson:
     (
       Core.State.t,
-      Tezos_operation_set.t,
       User_operation_set.t,
       Validators.t,
       BLAKE2B.t,
@@ -178,7 +167,6 @@ let load_snapshot =
   ];
   let (
     core_state,
-    included_tezos_operations,
     included_user_operations,
     validators,
     validators_hash,
@@ -194,7 +182,6 @@ let load_snapshot =
   let protocol =
     Protocol.{
       core_state,
-      included_tezos_operations,
       included_user_operations,
       validators,
       validators_hash,
