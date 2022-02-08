@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /usr/bin/env bash
 
 set -e
 
@@ -13,8 +13,7 @@ SECRET_KEY="edsk3QoqBuvdamxouPhin7swCvkQNgq4jP5KZPbwWNnwdZpSpJiEbq"
 DATA_DIRECTORY="data"
 
 sidecli() {
-  SIDECLI=$(esy x which sidecli)
-  eval $SIDECLI '"$@"'
+  eval dune exec bin/sidecli.exe -- '"$@"'
 }
 
 tezos-client() {
