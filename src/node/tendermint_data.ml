@@ -80,6 +80,7 @@ let map_option f ls =
     | None -> aux xs in
   aux ls
 
+(** Tendermin's output_log AKA decision log*)
 module OutputLog = struct
   type t = (CI.height, CI.value) Hashtbl.t
 
