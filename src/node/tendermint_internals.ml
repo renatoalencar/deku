@@ -58,3 +58,24 @@ let height = function
   | PrevoteOP (h, _, _)
   | PrecommitOP (h, _, _) ->
     h
+
+type consensus_state = {
+  mutable height : height;
+  mutable round : round;
+  mutable step : consensus_step;
+  mutable locked_value : value;
+  mutable locked_round : round;
+  mutable valid_value : value;
+  mutable valid_round : round;
+}
+
+let fresh_state height =
+  {
+    height;
+    round = 0;
+    step = Proposal;
+    locked_value = nil;
+    locked_round = -1;
+    valid_value = nil;
+    valid_round = -1;
+  }
