@@ -1,4 +1,6 @@
+open Crypto
 open Protocol
+open Validators
 
 (** Tendermint sometimes decides on a `Nil` value. *)
 type value =
@@ -79,3 +81,19 @@ let fresh_state height =
     valid_value = nil;
     valid_round = -1;
   }
+
+let is_allowed_proposer (global_state : State.t) (height : height)
+    (round : round) (address : Key_hash.t) =
+  let protocol_state = global_state.protocol in
+  let proposer = proposer protocol_state.validators height round in
+  global_state.identity.t = proposer.address
+
+let i_am_proposer (global_state : State.t) (height : height) (round : round) =
+  is_allowed_proposer global_state height round global_state.identity.t
+
+(** Tendermint as proof-of-authority *)
+let get_weight (global_state : State.t) (address : Key_hash.t) =
+  if Validators.is_validator global_state.protocol.validators address then
+    1
+  else
+    0
