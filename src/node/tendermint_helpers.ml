@@ -1,3 +1,5 @@
+module CI = Tendermint_internals
+open CI
 module type COUNTER = sig
   type 'a t
 
@@ -39,4 +41,17 @@ module Counter : COUNTER = struct
     let counted = count ls in
     let filtered = cut counted ~threshold in
     List.map fst filtered
+end
+
+module HeightHash = struct
+  type t = CI.height
+  let equal i j = i = j
+  let hash i = Int64.(logand i max_int |> to_int)
+end
+
+(* FIXME: find another name *)
+module IntSet = struct
+  include Hashtbl.Make (HeightHash)
+
+  let map_inplace f t = filter_map_inplace (fun x y -> Option.some (f x y)) t
 end
