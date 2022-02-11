@@ -80,6 +80,25 @@ let map_option f ls =
     | None -> aux xs in
   aux ls
 
+module OutputLog = struct
+  type t = (CI.height, CI.value) Hashtbl.t
+
+  let empty () : t = Hashtbl.create 0
+
+  let contains_nil t height = Hashtbl.find_opt t height |> Option.is_some |> not
+
+  let set t height value =
+    assert (contains_nil t height);
+    Hashtbl.add t height value
+
+  let contains t height block =
+    match Hashtbl.find_opt t height with
+    | None -> false
+    | Some block' -> block = block'
+end
+
+type output_log = OutputLog.t
+
 (************************************ Selection on input_log ************************************)
 
 let on_proposal (f : proposal_content -> 'a option) = function
