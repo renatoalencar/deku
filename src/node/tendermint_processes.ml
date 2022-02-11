@@ -288,6 +288,7 @@ let all_processes : process list =
     start_round;
     response_to_proposal;
     precommit_failed_previous_round;
+    prepare_default_precommit_prevote_phase;
     lock_prevote_phase;
     shortcut_prevote_fails;
     prepare_new_round_precommit_fail;
