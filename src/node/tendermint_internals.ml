@@ -16,3 +16,6 @@ let repr_of_value v = v
 
 (* FIXME: Tendermint (this is copied bad design)*)
 let produce_value : (State.t -> value) ref = ref (fun _ -> assert false)
+
+let block b = Block b
+let nil = Nil
