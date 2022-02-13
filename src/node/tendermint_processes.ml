@@ -6,9 +6,9 @@ module CD = Tendermint_data
 (* Values returned by processes, to be interpreted by the node as network
    CI.s *)
 type consensus_action =
-  | Broadcast          of CI.sidechain_consensus_op
+  | Broadcast         of CI.sidechain_consensus_op
   | Schedule (* TODO: deal with clocks later *)
-  | TendermintComplete
+  | RestartTendermint of (CI.height * CI.round)
   | DoNothing
 
 type process =
@@ -24,34 +24,42 @@ type process =
 let on_timeout_propose (height : CI.height) (round : CI.round)
     (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
     global_state =
-  if
-    height = consensus_state.CI.height
-    && round = consensus_state.CI.round
-    && consensus_state.CI.step = CI.Proposal
-  then (
-    consensus_state.CI.step <- CI.Prevote;
-    Some
-      (Broadcast
-         (CI.PrevoteOP
-            (consensus_state.CI.height, consensus_state.CI.round, CI.nil))))
+  let do_something consensus_state =
+    if
+      height = consensus_state.CI.height
+      && round = consensus_state.CI.round
+      && consensus_state.CI.step = CI.Proposal
+    then (
+      consensus_state.CI.step <- CI.Prevote;
+      Broadcast
+        (CI.PrevoteOP
+           (consensus_state.CI.height, consensus_state.CI.round, CI.nil)))
+    else
+      DoNothing in
+  if CD.contains_timeout msg_log height CI.Proposal then
+    Some (do_something consensus_state)
   else
-    Some DoNothing
+    None
 
 let on_timeout_prevote (height : CI.height) (round : CI.round)
     (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
     global_state =
-  if
-    height = consensus_state.CI.height
-    && round = consensus_state.CI.round
-    && consensus_state.CI.step = CI.Proposal
-  then (
-    consensus_state.CI.step <- CI.Precommit;
-    Some
-      (Broadcast
-         (CI.PrecommitOP
-            (consensus_state.CI.height, consensus_state.CI.round, CI.nil))))
+  let do_something consensus_state =
+    if
+      height = consensus_state.CI.height
+      && round = consensus_state.CI.round
+      && consensus_state.CI.step = CI.Prevote
+    then (
+      consensus_state.CI.step <- CI.Precommit;
+      Broadcast
+        (CI.PrecommitOP
+           (consensus_state.CI.height, consensus_state.CI.round, CI.nil)))
+    else
+      DoNothing in
+  if CD.contains_timeout msg_log height CI.Prevote then
+    Some (do_something consensus_state)
   else
-    Some DoNothing
+    None
 
 let start_round (height : CI.height) (round : CI.round)
     (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
@@ -59,8 +67,7 @@ let start_round (height : CI.height) (round : CI.round)
   consensus_state.CI.round <- round;
   consensus_state.CI.step <- Proposal;
   let return_action =
-    if CI.i_am_proposer global_state height round then begin
-      prerr_endline "***** I am proposer ?";
+    if CI.i_am_proposer global_state height round then
       if consensus_state.CI.valid_value <> CI.nil then
         Some
           (Broadcast
@@ -75,9 +82,9 @@ let start_round (height : CI.height) (round : CI.round)
              (CI.ProposalOP
                 ( consensus_state.CI.height,
                   consensus_state.CI.round,
-                  !CI.produce_value global_state (* FIXME: *),
+                  !CI.produce_value global_state
+                  (* FIXME: this isn't good design *),
                   consensus_state.CI.valid_round )))
-    end
     else
       Some Schedule
     (* FIXME: Clock*) in
@@ -86,10 +93,16 @@ let start_round (height : CI.height) (round : CI.round)
 let on_timeout_precommit (height : CI.height) (round : CI.round)
     (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
     global_state =
-  if height = consensus_state.CI.height && round = consensus_state.CI.round then
-    Some TendermintComplete
+  let do_something consensus_state =
+    if height = consensus_state.CI.height && round = consensus_state.CI.round
+    then
+      RestartTendermint (height, round + 1)
+    else
+      DoNothing in
+  if CD.contains_timeout msg_log height CI.Precommit then
+    Some (do_something consensus_state)
   else
-    Some DoNothing
+    None
 
 let response_to_proposal (height : CI.height) (round : CI.round)
     (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
@@ -106,8 +119,7 @@ let response_to_proposal (height : CI.height) (round : CI.round)
       && (consensus_state.locked_round = -1
          || consensus_state.locked_value = value)
     then
-      let t = Broadcast (CI.PrevoteOP (height, round, CI.repr_of_value value)) in
-      t
+      Broadcast (CI.PrevoteOP (height, round, CI.repr_of_value value))
     else
       Broadcast (CI.PrevoteOP (height, round, CI.nil)) in
   let found_set =
@@ -171,8 +183,11 @@ let prepare_default_precommit_prevote_phase (height : CI.height)
     (msg_log : CD.input_log) dlog global_state =
   let found_set : CD.MySet.t =
     CD.count_prevotes msg_log consensus_state global_state in
-  let do_something = Schedule (* FIXME: Clocks *) in
-  if found_set = CD.MySet.empty then None else Some do_something
+  let do_something () = Schedule (* FIXME: Clocks *) in
+  if found_set = CD.MySet.empty || consensus_state.step <> Prevote then
+    None
+  else
+    Some (do_something ())
 
 let lock_prevote_phase (height : CI.height) (round : CI.round)
     (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
@@ -259,7 +274,7 @@ let accept_block (height : CI.height) (round : CI.round)
     let value, valid_round = CD.MySet.choose valid_set in
     if CI.is_valid value then (
       CD.OutputLog.set dlog height value;
-      Some TendermintComplete)
+      Some (RestartTendermint (Int64.add height 1L, 0)))
     else
       Some DoNothing in
   if valid_set = CD.MySet.empty || not (CD.OutputLog.contains_nil dlog height)
@@ -288,10 +303,13 @@ let all_processes : process list =
     start_round;
     response_to_proposal;
     precommit_failed_previous_round;
-    prepare_default_precommit_prevote_phase;
     lock_prevote_phase;
     shortcut_prevote_fails;
+    prepare_default_precommit_prevote_phase;
     prepare_new_round_precommit_fail;
     accept_block;
     handle_node_delay;
+    on_timeout_propose;
+    on_timeout_prevote;
+    on_timeout_precommit;
   ]
