@@ -45,10 +45,14 @@ type prevote_content = {
 
 type precommit_content = prevote_content
 
+(* FIXME: we can do better than this now that we know the requirements:
+    - find a way for "tendermint processes" to register to the input log
+    - find a different way of handling clocks and timeouts? *)
 type content =
   | ProposalContent  of proposal_content
   | PrevoteContent   of prevote_content
   | PrecommitContent of precommit_content
+  | Timeout  (** Used to trigger actions on timeouts *)
 
 (* TODO: ensure PrevoteOP and PrecommitOP contains repr_values and not values. *)
 let content_of_op sender = function
@@ -60,16 +64,26 @@ let content_of_op sender = function
     PrecommitContent { process_round; repr_value; sender }
 
 (* TODO: ensure there is no data duplication in input_log *)
-type input_log = (index, content list) Hashtbl.t
-let empty () : input_log = Hashtbl.create 0
+type input_log = {
+  msg_log : (index, content list) Hashtbl.t;
+  timeouts : (index, content) Hashtbl.t;
+      (* Making timeouts a separate queue because it's easier at the moment... *)
+}
+let empty () : input_log =
+  { msg_log = Hashtbl.create 0; timeouts = Hashtbl.create 0 }
 
-let add (log : input_log) (index : index) (c : content) =
-  let previous =
-    match Hashtbl.find_opt log index with
-    | Some ls -> ls
-    | None -> [] in
-  Hashtbl.replace log index (c :: previous);
-  log
+let add (input_log : input_log) (index : index) (c : content) =
+  match c with
+  | Timeout ->
+    Hashtbl.add input_log.timeouts index c;
+    input_log
+  | c ->
+    let previous =
+      match Hashtbl.find_opt input_log.msg_log index with
+      | Some ls -> ls
+      | None -> [] in
+    Hashtbl.replace input_log.msg_log index (c :: previous);
+    input_log
 
 let map_option f ls =
   let rec aux = function
@@ -79,6 +93,13 @@ let map_option f ls =
     | Some y -> y :: aux xs
     | None -> aux xs in
   aux ls
+
+let contains_timeout input_log height step =
+  match Hashtbl.find_opt input_log.timeouts (height, step) with
+  | None -> false
+  | Some _ ->
+    Hashtbl.remove input_log.timeouts (height, step);
+    true
 
 (** Tendermin's output_log AKA decision log*)
 module OutputLog = struct
@@ -109,10 +130,12 @@ let on_proposal (f : proposal_content -> 'a option) = function
 let select_matching_step (msg_log : input_log) (i : index)
     (s : CI.consensus_step) (p : 'b -> 'a option) =
   match i with
-  | _, x when x <> s -> raise (Invalid_argument "Bad step")
-  | _ ->
-  try Hashtbl.find msg_log i |> map_option p with
-  | Not_found -> []
+  | _, step when step <> s -> raise (Invalid_argument "Bad step")
+  | _h, _step ->
+    let found =
+      try Hashtbl.find msg_log.msg_log i |> map_option p with
+      | Not_found -> [] in
+    found
 
 let select_matching_prevote (msg_log : input_log) (i : index)
     (p : content -> 'a option) =
@@ -180,7 +203,7 @@ let select_proposal_matching_several_rounds (msg_log : input_log)
 let compute_threshold global_state =
   let open Protocol.Validators in
   let validators = length global_state.protocol.validators |> float_of_int in
-  validators -. (1. /. 3.)
+  (2. *. (validators -. 1.) /. 3.) +. 1.
 
 (** Selects (repr_value, process_round) from Prevote data if the pair has enough
    cumulated weight.*)
