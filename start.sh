@@ -28,10 +28,10 @@ HASH=$(sidecli produce-block "$data_directory/0" | awk '{ print $2 }')
 
 sleep 0.1
 
-echo "Signing"
-for i in ${VALIDATORS[@]}; do
-  sidecli sign-block "$data_directory/$i" $HASH
-done
+#echo "Signing"
+#for i in ${VALIDATORS[@]}; do
+#  sidecli sign-block "$data_directory/$i" $HASH
+#done
 
 for PID in ${SERVERS[@]}; do
   wait $PID
