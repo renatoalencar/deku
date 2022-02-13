@@ -60,6 +60,20 @@ let handle_request (type req res)
       | Error err ->
         print_error err;
         await (Response.make ~status:`Internal_server_error ()))
+
+(** Consensus step as defined by Tendermint. *)
+let handle_receive_consensus_step =
+  handle_request
+    (module Networking.Consensus_operation)
+    (fun update_state request ->
+      let open Flows in
+      let%ok () =
+        (* FIXME: check sender signature! *)
+        received_consensus_step (Server.get_state ()) update_state
+          request.sender request.operation in
+
+      Ok ())
+
 let handle_received_block_and_signature =
   handle_request
     (module Networking.Block_and_signature_spec)
@@ -167,7 +181,8 @@ let node folder =
     |> handle_request_nonce
     |> handle_register_uri
     |> handle_receive_user_operation_gossip
-    |> handle_receive_consensus_operation
+    (* |> handle_receive_consensus_operation FIXME: commented out for now to not interfer with Tendermint *)
+    |> handle_receive_consensus_step
     |> handle_withdraw_proof
     |> handle_ticket_balance
     |> handle_trusted_validators_membership
