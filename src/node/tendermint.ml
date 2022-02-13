@@ -9,7 +9,8 @@ type t = {
   identity : State.identity;
   (* FIXME: clocks *)
   consensus_states : consensus_state IntSet.t;
-  procs : (height * process) list;
+  (* FIXME: we don't want this to be mutable *)
+  mutable procs : (height * process) list;
   node_state : State.t;
   input_log : input_log;
   output_log : output_log;
@@ -17,6 +18,11 @@ type t = {
 (** Tendermint simplification: as Deku is not going to run several
     blockchain heights at the same time, we only consider one set of
     states and clocks. *)
+
+type should_restart_tendermint =
+  | DontRestart
+  | RestartAtHeight of CI.height
+  | RestartAtRound  of CI.round
 
 let make identity node_state current_height =
   (* FIXME: add clocks *)
@@ -46,11 +52,11 @@ let tendermint_step node =
     match processes with
     | ((height, process) as p) :: rest -> begin
       let consensus_state = IntSet.find node.consensus_states height in
-      let round = consensus_state.round in
+      let round = consensus_state.CI.round in
       let message_log = node.input_log in
+      let output = node.output_log in
       match
-        process height round consensus_state message_log (OutputLog.empty ())
-          node.node_state
+        process height round consensus_state message_log output node.node_state
       with
       (* The process precondition hasn't been activated *)
       | None -> exec_procs rest (p :: still_active) network_actions
@@ -59,20 +65,24 @@ let tendermint_step node =
       (* The process terminates silently *)
       | Some DoNothing -> exec_procs rest still_active network_actions
       (* We accepted a block for the height *)
-      | Some TendermintComplete ->
+      | Some (RestartTendermint (height, 0)) ->
         (* Start new processes and forget about the older ones *)
-        ([], network_actions)
+        (* TODO: this is only valid for the (current) restricted version of Tendermint which does not
+           support several cycles/heights running in parallel. *)
+        ([], network_actions, RestartAtHeight height)
+      | Some (RestartTendermint (height, round)) ->
+        ([], network_actions, RestartAtRound round)
       (* Add a new clock to the scheduler *)
-      | Some Schedule (* FIXME: clocks *) ->
-        (* FIXME: handle clock *)
+      | Some Schedule (* TODO: Clocks*) ->
         exec_procs rest still_active network_actions
     end
-    | [] -> (still_active, network_actions) in
-  prerr_endline
-    (Printf.sprintf "*** About to execute %d processes" (List.length node.procs));
-  let still_active, network_actions = exec_procs node.procs [] [] in
-  (* TODO: Do we really need order on the network? *)
-  ({ node with procs = still_active }, List.rev network_actions)
+    | [] -> (still_active, network_actions, DontRestart) in
+  let still_active, network_actions, should_restart =
+    exec_procs node.procs [] [] in
+  (* TODO: I don't want this to be mutable *)
+  node.procs <- still_active;
+  ({ node with procs = still_active }, List.rev network_actions, should_restart)
+(* List.rev: Do we really need order on the network? *)
 
 let add_to_input node sender op =
   let input_log = node.input_log in
@@ -107,7 +117,7 @@ let add_consensus_op node update_state sender op =
 
 let rec exec_consensus node =
   let open CI in
-  let node, network_actions = tendermint_step node in
+  let node, network_actions, should_restart_tendermint = tendermint_step node in
   List.iter (broadcast_op node.node_state) network_actions;
   (*TODO: clocks?*)
   match node.procs with
