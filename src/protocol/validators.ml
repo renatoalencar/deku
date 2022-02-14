@@ -61,7 +61,7 @@ let proposer t height round =
   (* n should stay small enough *)
   let i1 = Int64.rem height (Int64.of_int n) in
   let i1 = Int64.to_int i1 in
-  let i = i1 + (round mod n) in
+  let i = (i1 + (round mod n)) mod n in
   List.nth validators i
 
 (** Verifies if someone is a validator as required in Tendermint consensus. *)
