@@ -99,7 +99,7 @@ let is_allowed_proposer (global_state : State.t) (height : height)
     (round : round) (address : Key_hash.t) =
   let protocol_state = global_state.protocol in
   let proposer = proposer protocol_state.validators height round in
-  let b = Key_hash.equal global_state.identity.t proposer.address in
+  let b = Key_hash.equal address proposer.address in
   b
 
 let i_am_proposer (global_state : State.t) (height : height) (round : round) =
