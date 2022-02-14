@@ -7,7 +7,7 @@ module CI = Tendermint_internals
 
 type t = {
   identity : State.identity;
-  (* FIXME: clocks *)
+  clocks : clock list IntSet.t;
   consensus_states : consensus_state IntSet.t;
   (* FIXME: we don't want this to be mutable *)
   mutable procs : (height * process) list;
@@ -25,15 +25,16 @@ type should_restart_tendermint =
   | RestartAtRound  of CI.round
 
 let make identity node_state current_height =
-  (* FIXME: add clocks *)
-  let new_state = fresh_state current_height in
+  let clocks = IntSet.create 0 in
+  let new_state = CI.fresh_state current_height in
   let states = IntSet.create 0 in
   IntSet.add states 0L new_state;
   let procs = List.map (fun x -> (current_height, x)) all_processes in
-  let input_log = empty () in
-  let output_log = OutputLog.empty () in
+  let input_log = CD.empty () in
+  let output_log = CD.OutputLog.empty () in
   {
     identity;
+    clocks;
     consensus_states = states;
     node_state;
     procs;
@@ -48,6 +49,7 @@ let current_height node =
     TODO: Ensures that messages received over network go through signature verification before adding them to input_log
     FIXME: we're not empyting the input_log atm *)
 let tendermint_step node =
+  let open Tendermint_processes in
   let rec exec_procs processes still_active network_actions =
     match processes with
     | ((height, process) as p) :: rest -> begin
@@ -73,7 +75,12 @@ let tendermint_step node =
       | Some (RestartTendermint (height, round)) ->
         ([], network_actions, RestartAtRound round)
       (* Add a new clock to the scheduler *)
-      | Some Schedule (* TODO: Clocks*) ->
+      | Some (Schedule c) ->
+        let cs =
+          IntSet.find_opt node.clocks height |> Option.value ~default:[] in
+        (* FIXME: this should not be necessary *)
+        if not (List.exists (fun c' -> c.Clock.step = c'.Clock.step) cs) then
+          IntSet.add node.clocks height (c :: cs);
         exec_procs rest still_active network_actions
     end
     | [] -> (still_active, network_actions, DontRestart) in
@@ -84,10 +91,9 @@ let tendermint_step node =
   ({ node with procs = still_active }, List.rev network_actions, should_restart)
 (* List.rev: Do we really need order on the network? *)
 
-let add_to_input node sender op =
-  let input_log = node.input_log in
-  let index = (height op, step_of_op op) in
-  add input_log index (content_of_op sender op)
+let add_to_input input_log height step content =
+  let index = (height, step) in
+  CD.add input_log index content
 
 let is_valid_consensus_op state consensus_op =
   (* TODO: this is a filter for input log since it's only optimization (don't keep stuff from past)*)
@@ -106,30 +112,66 @@ let is_valid_consensus_op state consensus_op =
     ok ()
 
 let broadcast_op state consensus_op =
-  prerr_endline "*** Called broadcast";
-  (* TODO: Network stuff *)
-  prerr_endline "*** Broadcasted"
+  let node_address = state.State.identity.t in
+  let node_state = state in
+  let open Lwt in
+  async (fun () ->
+      Lwt_unix.sleep 1.0 >>= fun _ ->
+      Networking.broadcast_consensus_op node_state
+        { operation = consensus_op; sender = node_address })
 
 let add_consensus_op node update_state sender op =
-  let input_log = add_to_input node sender op in
-  (* TODO: Call tendermint_step here? Call update_state_here? *)
+  let input_log = node.input_log in
+  let input_log =
+    add_to_input input_log (CI.height op) (CI.step_of_op op)
+      (CD.content_of_op sender op) in
   { node with input_log }
-
 let rec exec_consensus node =
   let open CI in
-  let node, network_actions, should_restart_tendermint = tendermint_step node in
+  let node, network_actions, should_restart = tendermint_step node in
+  (* Send all actions over the network *)
   List.iter (broadcast_op node.node_state) network_actions;
-  (*TODO: clocks?*)
-  match node.procs with
-  (* If we no longer have any active process, we start next height!*)
-  | [] ->
+  match (node.procs, should_restart) with
+  | _, RestartAtRound r ->
     let cur_height = current_height node in
-    let new_height = Int64.add cur_height 1L in
+    let cur_state = IntSet.find node.consensus_states cur_height in
+    cur_state.round <- r;
+    let new_processes = List.map (fun p -> (cur_height, p)) all_processes in
+    exec_consensus { node with procs = new_processes }
+  | [], RestartAtHeight new_height ->
+    (* If we no longer have any active process, we start at  *)
     let new_state = CI.fresh_state new_height in
     IntSet.add node.consensus_states new_height new_state;
     let new_processes = List.map (fun p -> (new_height, p)) all_processes in
     exec_consensus { node with procs = new_processes }
-  | _ -> node
+  | _ ->
+    (* Start the non-started clocks *)
+    IntSet.map_inplace
+      (fun height clocks -> List.map (start_clock height node) clocks)
+      node.clocks;
+    node
 
+(* FIXME:? check for race conditions
+   TODO: find a responsible adult to talk to about this.*)
+and start_clock current_height node clock =
+  let open Lwt in
+  let open Tendermint_processes in
+  if clock.Clock.started then
+    clock
+  else begin
+    prerr_endline
+      ("*** Starting clock for step " ^ string_of_step clock.Clock.step);
+    async (fun () ->
+        Lwt_unix.sleep (float_of_int clock.Clock.time) >>= fun () ->
+        let input_log = node.input_log in
+        let _ =
+          add_to_input input_log current_height clock.Clock.step CD.Timeout
+        in
+        let new_node = exec_consensus node in
+        (* FIXME: ? I don't want this to be mutable *)
+        node.procs <- new_node.procs;
+        Lwt.return_unit);
+    { clock with started = true }
+  end
 let make_proposal height round block =
   CI.ProposalOP (height, round, CI.block block, -1)

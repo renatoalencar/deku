@@ -207,27 +207,33 @@ let compute_threshold global_state =
 
 (** Selects (repr_value, process_round) from Prevote data if the pair has enough
    cumulated weight.*)
-let count_prevotes (msg_log : input_log) (consensus_state : CI.consensus_state)
-    (global_state : State.t) : MySet.t =
+let count_prevotes ?prevote_selection (msg_log : input_log)
+    (consensus_state : CI.consensus_state) (global_state : State.t) : MySet.t =
+  let open CI in
+  let prevote_selection =
+    match prevote_selection with
+    | None -> (
+      function
+      | PrevoteContent content ->
+        ( (content.repr_value, content.process_round),
+          CI.get_weight global_state content.sender )
+      | _ -> failwith "This should never happen, it's prevotes")
+    | Some p -> p in
   let threshold = compute_threshold global_state in
   let index = (consensus_state.height, Prevote) in
   let all_prevotes =
     select_matching_prevote msg_log index (fun x -> Option.some @@ x) in
-  let prevotes_with_weights =
-    List.map
-      (function
-        | PrevoteContent content ->
-          ( (content.repr_value, content.process_round),
-            CI.get_weight global_state content.sender )
-        | _ -> failwith "This should never happen, it's prevotes")
-      all_prevotes in
+  let prevotes_with_weights = List.map prevote_selection all_prevotes in
   let filtered = Counter.filter_threshold prevotes_with_weights ~threshold in
+  CI.debug global_state
+    (Printf.sprintf "filtered is of length %d" (List.length filtered));
   MySet.of_list filtered
 
 (** Selects (repr_value, process_round) from Precommit data if the pair has
    enough cumulated weight. *)
 let count_precommits (msg_log : input_log)
     (consensus_state : CI.consensus_state) (global_state : State.t) =
+  let open CI in
   let threshold = compute_threshold global_state in
   let index = (consensus_state.height, Precommit) in
   let all_precommits =
@@ -249,8 +255,8 @@ let count_precommits (msg_log : input_log)
    of all actions as this is failure detection. *)
 let count_all_actions (msg_log : input_log)
     (consensus_state : CI.consensus_state) (global_state : State.t) =
+  let open CI in
   let threshold = compute_threshold global_state in
-  prerr_endline ("*** Threshold is " ^ string_of_float threshold);
   let index_proposal = (consensus_state.height, Proposal) in
   let index_prevote = (consensus_state.height, Prevote) in
   let index_precommit = (consensus_state.height, Precommit) in

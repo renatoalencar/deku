@@ -3,11 +3,23 @@
 module CI = Tendermint_internals
 module CD = Tendermint_data
 
+module Clock = struct
+  type 'a t = {
+    time : int;
+    step : CI.consensus_step;
+    on_timeout :
+      CI.consensus_state -> CD.input_log -> CD.output_log -> State.t -> 'a;
+    started : bool;
+  }
+
+  let make time step on_timeout = { time; step; on_timeout; started = false }
+end
+
 (* Values returned by processes, to be interpreted by the node as network
    CI.s *)
 type consensus_action =
   | Broadcast         of CI.sidechain_consensus_op
-  | Schedule (* TODO: deal with clocks later *)
+  | Schedule          of consensus_action option Clock.t
   | RestartTendermint of (CI.height * CI.round)
   | DoNothing
 
@@ -20,6 +32,9 @@ type process =
   State.t ->
   consensus_action option
 (** Tendermint processes *)
+
+type clock = consensus_action option Clock.t
+(** Clocks scheduled for timeouts, to be used in Tendermint *)
 
 let on_timeout_propose (height : CI.height) (round : CI.round)
     (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
@@ -82,12 +97,13 @@ let start_round (height : CI.height) (round : CI.round)
              (CI.ProposalOP
                 ( consensus_state.CI.height,
                   consensus_state.CI.round,
-                  !CI.produce_value global_state
-                  (* FIXME: this isn't good design *),
+                  !CI.produce_value global_state (* FIXME: *),
                   consensus_state.CI.valid_round )))
     else
-      Some Schedule
-    (* FIXME: Clock*) in
+      Some
+        (Schedule
+           (Clock.make CI.proposal_timeout CI.Proposal
+              (on_timeout_propose height round))) in
   return_action
 
 let on_timeout_precommit (height : CI.height) (round : CI.round)
@@ -119,7 +135,8 @@ let response_to_proposal (height : CI.height) (round : CI.round)
       && (consensus_state.locked_round = -1
          || consensus_state.locked_value = value)
     then
-      Broadcast (CI.PrevoteOP (height, round, CI.repr_of_value value))
+      let t = Broadcast (CI.PrevoteOP (height, round, CI.repr_of_value value)) in
+      t
     else
       Broadcast (CI.PrevoteOP (height, round, CI.nil)) in
   let found_set =
@@ -181,10 +198,21 @@ let precommit_failed_previous_round (height : CI.height) (round : CI.round)
 let prepare_default_precommit_prevote_phase (height : CI.height)
     (round : CI.round) (consensus_state : CI.consensus_state)
     (msg_log : CD.input_log) dlog global_state =
+  let take_all_prevotes =
+    let open Tendermint_data in
+    function
+    | PrevoteContent content ->
+      ( (CI.nil, content.process_round),
+        CI.get_weight global_state content.sender )
+    | _ -> failwith "This shouldn't happend, it's prevotes" in
   let found_set : CD.MySet.t =
-    CD.count_prevotes msg_log consensus_state global_state in
-  let do_something () = Schedule (* FIXME: Clocks *) in
-  if found_set = CD.MySet.empty || consensus_state.step <> Prevote then
+    CD.count_prevotes ~prevote_selection:take_all_prevotes msg_log
+      consensus_state global_state in
+  let do_something () =
+    Schedule
+      (Clock.make CI.prevote_timeout CI.Prevote
+         (on_timeout_prevote height round)) in
+  if found_set = CD.MySet.empty || consensus_state.CI.step <> CI.Prevote then
     None
   else
     Some (do_something ())
@@ -253,8 +281,11 @@ let prepare_new_round_precommit_fail (height : CI.height) (round : CI.round)
   let found_set =
     CD.count_precommits msg_log consensus_state global_state
     |> CD.MySet.filter (fun (_, r) -> r = consensus_state.CI.round) in
-  let do_something = Schedule (* FIXME: Clocks *) in
-  if found_set = CD.MySet.empty then None else Some do_something
+  let do_something () =
+    Schedule
+      (Clock.make CI.precommit_timeout CI.Precommit
+         (on_timeout_precommit height round)) in
+  if found_set = CD.MySet.empty then None else Some (do_something ())
 
 let accept_block (height : CI.height) (round : CI.round)
     (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
@@ -274,7 +305,14 @@ let accept_block (height : CI.height) (round : CI.round)
     let value, valid_round = CD.MySet.choose valid_set in
     if CI.is_valid value then (
       CD.OutputLog.set dlog height value;
-      Some (RestartTendermint (Int64.add height 1L, 0)))
+      (* DEAD CODE FEB 8 consensus_state.CI.height <- Int64.(add consensus_state.CI.height 1L) ;
+         consensus_state.CI.round <- 0;
+         consensus_state.locked_round <- -1 ;
+         consensus_state.locked_value <- CI.nil ;
+         consensus_state.CI.valid_round <- -1 ;
+         consensus_state.CI.valid_value <- CI.nil ; *)
+      Some (RestartTendermint (Int64.add height 1L, 0))
+      (* start_round Int64.(add consensus_state.CI.height 1L) 0 consensus_state msg_log dlog global_state *))
     else
       Some DoNothing in
   if valid_set = CD.MySet.empty || not (CD.OutputLog.contains_nil dlog height)

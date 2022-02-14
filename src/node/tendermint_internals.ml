@@ -58,6 +58,11 @@ let string_of_op = function
     Printf.sprintf "<PRECOMMIT, %Ld, %d, %s>" height round
       (string_of_value value)
 
+let string_of_step = function
+  | Proposal -> "PROPOSAL"
+  | Prevote -> "PREVOTE"
+  | Precommit -> "PRECOMMIT"
+
 let height = function
   | ProposalOP (h, _, _, _)
   | PrevoteOP (h, _, _)
@@ -85,11 +90,17 @@ let fresh_state height =
     valid_round = -1;
   }
 
+let debug state msg =
+  let self = Crypto.Key_hash.to_string state.State.identity.t in
+  let self = String.sub self (String.length self - 6) 6 in
+  prerr_endline ("*** " ^ self ^ "   " ^ msg)
+
 let is_allowed_proposer (global_state : State.t) (height : height)
     (round : round) (address : Key_hash.t) =
   let protocol_state = global_state.protocol in
   let proposer = proposer protocol_state.validators height round in
-  global_state.identity.t = proposer.address
+  let b = Key_hash.equal global_state.identity.t proposer.address in
+  b
 
 let i_am_proposer (global_state : State.t) (height : height) (round : round) =
   is_allowed_proposer global_state height round global_state.identity.t
@@ -100,3 +111,7 @@ let get_weight (global_state : State.t) (address : Key_hash.t) =
     1
   else
     0
+
+let proposal_timeout = 1
+let prevote_timeout = 1
+let precommit_timeout = 1
