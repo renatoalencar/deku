@@ -1,4 +1,4 @@
-#! /bin/sh
+#! /bin/bash
 
 set -e 
 data_directory="data"
@@ -24,7 +24,7 @@ done
 sleep 1
 
 echo "Producing a block"
-HASH=$(sidecli produce-block "$data_directory/0" | awk '{ print $2 }')
+HASH=$(sidecli start-consensus "$data_directory/0" | awk '{ print $2 }')
 
 sleep 0.1
 

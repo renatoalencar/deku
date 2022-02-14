@@ -200,9 +200,12 @@ let prepare_default_precommit_prevote_phase (height : CI.height)
   let take_all_prevotes =
     let open Tendermint_data in
     function
-    | PrevoteContent content ->
-      ( (CI.nil, content.process_round),
-        CI.get_weight global_state content.sender )
+    | PrevoteContent content when content.process_round = consensus_state.round
+      ->
+      Some
+        ( (CI.nil, content.process_round),
+          CI.get_weight global_state content.sender )
+    | PrevoteContent _ -> None
     | _ -> failwith "This shouldn't happend, it's prevotes" in
   let found_set : CD.MySet.t =
     CD.count_prevotes ~prevote_selection:take_all_prevotes msg_log

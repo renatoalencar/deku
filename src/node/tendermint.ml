@@ -84,8 +84,7 @@ let tendermint_step node =
         let cs =
           IntSet.find_opt node.clocks height |> Option.value ~default:[] in
         (* FIXME: this should not be necessary *)
-        if not (List.exists (fun c' -> c.Clock.step = c'.Clock.step) cs) then
-          IntSet.add node.clocks height (c :: cs);
+        IntSet.add node.clocks height (c :: cs);
         exec_procs rest still_active network_actions
     end
     | [] -> (still_active, network_actions, DontRestart) in

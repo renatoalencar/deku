@@ -2,6 +2,8 @@ open Crypto
 open State
 
 open Tendermint_helpers
+
+open Tendermint_internals
 (** Tendermint input_log and output_log.
     Holds all the querying function on the input_log required by Tendermint subprocesses. *)
 
@@ -27,16 +29,17 @@ type index = height * index_step
 (** Tendermint input is indexed by height and consensus step. *)
 
 type proposal_content = {
-  process_round : round;
+  process_round : round;  (** Round of the process that sent the PROPOSAL *)
   proposal : CI.value;
   process_valid_round : round;
+      (** "Locked round" (see paper) of the PRECOMMIT of this value; -1 when the value has notbeen locked before *)
   sender : node_identifier;
 }
 (** Proposal messages carry more relevant information: the process_round, the
    proposed value, the last known valid round and, the sender *)
 
 type prevote_content = {
-  process_round : round;
+  process_round : round;  (** Round of the process that sent the PREVOTE *)
   repr_value : CI.value;
   sender : node_identifier;
 }
@@ -214,17 +217,18 @@ let count_prevotes ?prevote_selection (msg_log : input_log)
     match prevote_selection with
     | None -> (
       function
-      | PrevoteContent content ->
-        ( (content.repr_value, content.process_round),
-          CI.get_weight global_state content.sender )
+      | PrevoteContent content
+        when content.process_round = consensus_state.round ->
+        Some
+          ( (content.repr_value, content.process_round),
+            get_weight global_state content.sender )
+      | PrevoteContent _ -> None
       | _ -> failwith "This should never happen, it's prevotes")
     | Some p -> p in
   let threshold = compute_threshold global_state in
   let index = (consensus_state.height, Prevote) in
-  let all_prevotes =
-    select_matching_prevote msg_log index (fun x -> Option.some @@ x) in
-  let prevotes_with_weights = List.map prevote_selection all_prevotes in
-  let filtered = Counter.filter_threshold prevotes_with_weights ~threshold in
+  let all_prevotes = select_matching_prevote msg_log index prevote_selection in
+  let filtered = Counter.filter_threshold all_prevotes ~threshold in
   MySet.of_list filtered
 
 (** Selects (repr_value, process_round) from Precommit data if the pair has
