@@ -135,8 +135,7 @@ let response_to_proposal (height : CI.height) (round : CI.round)
       && (consensus_state.locked_round = -1
          || consensus_state.locked_value = value)
     then
-      let t = Broadcast (CI.PrevoteOP (height, round, CI.repr_of_value value)) in
-      t
+      Broadcast (CI.PrevoteOP (height, round, CI.repr_of_value value))
     else
       Broadcast (CI.PrevoteOP (height, round, CI.nil)) in
   let found_set =

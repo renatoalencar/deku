@@ -225,8 +225,6 @@ let count_prevotes ?prevote_selection (msg_log : input_log)
     select_matching_prevote msg_log index (fun x -> Option.some @@ x) in
   let prevotes_with_weights = List.map prevote_selection all_prevotes in
   let filtered = Counter.filter_threshold prevotes_with_weights ~threshold in
-  CI.debug global_state
-    (Printf.sprintf "filtered is of length %d" (List.length filtered));
   MySet.of_list filtered
 
 (** Selects (repr_value, process_round) from Precommit data if the pair has

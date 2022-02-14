@@ -45,6 +45,11 @@ let make identity node_state current_height =
 let current_height node =
   List.fold_left max 0L (IntSet.to_seq_keys node.consensus_states |> List.of_seq)
 
+(* FIXME: bad design *)
+let () =
+  CI.produce_value :=
+    fun state -> CI.block (Building_blocks.produce_block state)
+
 (** Process messages in the queue and decide actions; pure function, to be interpeted in Lwt later.
     TODO: Ensures that messages received over network go through signature verification before adding them to input_log
     FIXME: we're not empyting the input_log atm *)

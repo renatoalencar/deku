@@ -326,9 +326,6 @@ let received_consensus_operation state update_state consensus_operation
   Ok ()
 
 let received_consensus_step state update_state sender operation =
-  prerr_endline
-    ("*** Received consensus step "
-    ^ Tendermint_internals.string_of_op operation);
   let%ok () =
     Tendermint.is_valid_consensus_op state operation
     |> Result.map_error (fun _msg -> `Not_consensus_operation) in
