@@ -19,8 +19,25 @@ let repr_of_value v = v
 (* FIXME: this is copied bad design. *)
 let produce_value : (State.t -> value) ref = ref (fun _ -> assert false)
 
-(* FIXME: this is copied bad design. *)
-let is_valid : (State.t -> value -> bool) ref = ref (fun _ -> assert false)
+let is_valid state value =
+  match value with
+  | Nil -> false
+  | Block block ->
+    (* FIXME: check signatures for real *)
+    let is_all_operations_properly_signed _block = true in
+    (*TODO: real logging system *)
+    if block.Block.block_height < state.State.protocol.block_height then begin
+      prerr_endline
+        (Printf.sprintf
+           "new block has a lower block height (%Ld) than the current state \
+            (%Ld)"
+           block.Block.block_height state.State.protocol.block_height);
+      false
+    end
+    else if is_all_operations_properly_signed block then
+      true
+    else
+      false
 
 let block b = Block b
 let nil = Nil
@@ -68,6 +85,12 @@ let height = function
   | PrevoteOP (h, _, _)
   | PrecommitOP (h, _, _) ->
     h
+
+let round = function
+  | ProposalOP (_, r, _, _)
+  | PrevoteOP (_, r, _)
+  | PrecommitOP (_, r, _) ->
+    r
 
 type consensus_state = {
   mutable height : height;

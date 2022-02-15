@@ -28,6 +28,9 @@ let print_error err =
   | `Invalid_signature_author -> eprintf "Invalid_signature_author"
   | `Invalid_signature_for_this_hash ->
     eprintf "Invalid_signature_for_this_hash"
+  | `Signed_by_unauthorized_validator ->
+    eprintf "Signed_by_unauthorized_validator"
+  | `Consensus_not_reached_yet -> eprintf "Consensus_not_reached_yet"
   | `Invalid_state_root_hash -> eprintf "Invalid_state_root_hash"
   | `Not_current_block_producer -> eprintf "Not_current_block_producer"
   | `Not_a_json -> eprintf "Invalid json"
@@ -68,41 +71,27 @@ let handle_receive_consensus_step =
     (fun update_state request ->
       let open Flows in
       let%ok () =
-        (* FIXME: check sender signature! *)
         received_consensus_step (Server.get_state ()) update_state
           request.sender request.operation in
 
       Ok ())
 
-let handle_received_block_and_signature =
-  handle_request
-    (module Networking.Block_and_signature_spec)
-    (fun update_state request ->
-      let open Flows in
-      let%ok () =
-        received_block (Server.get_state ()) update_state request.block
-        |> ignore_some_errors in
-      let%ok () =
-        received_signature (Server.get_state ()) update_state
-          ~hash:request.block.hash ~signature:request.signature
-        |> ignore_some_errors in
-      Ok ())
-let handle_received_signature =
+let handle_received_precommit_block =
   handle_request
     (module Networking.Signature_spec)
     (fun update_state request ->
       let open Flows in
       let%ok () =
-        received_signature (Server.get_state ()) update_state ~hash:request.hash
+        received_consensus_step (Server.get_state ()) update_state
+          request.sender request.operation in
+      let%ok () =
+        received_precommit_block (Server.get_state ()) update_state
+          ~consensus_op:request.operation ~sender:request.sender
+          ~hash:request.hash ~hash_signature:request.hash_signature
           ~signature:request.signature
         |> ignore_some_errors in
       Ok ())
-let handle_block_by_hash =
-  handle_request
-    (module Networking.Block_by_hash_spec)
-    (fun _update_state request ->
-      let block = Flows.find_block_by_hash (Server.get_state ()) request.hash in
-      Ok block)
+
 let handle_block_level =
   handle_request
     (module Networking.Block_level)
@@ -118,8 +107,7 @@ let handle_protocol_snapshot =
           snapshot = snapshots.current_snapshot;
           additional_blocks = snapshots.additional_blocks;
           last_block = snapshots.last_block;
-          last_block_signatures =
-            Signatures.to_list snapshots.last_block_signatures;
+          last_block_signatures = snapshots.last_block_signatures;
         })
 let handle_request_nonce =
   handle_request
@@ -174,14 +162,12 @@ let node folder =
     App.empty
     |> App.port (Node.Server.get_port () |> Option.get)
     |> handle_block_level
-    |> handle_received_block_and_signature
-    |> handle_received_signature
-    |> handle_block_by_hash
+    |> handle_received_precommit_block
     |> handle_protocol_snapshot
     |> handle_request_nonce
     |> handle_register_uri
     |> handle_receive_user_operation_gossip
-    (* |> handle_receive_consensus_operation FIXME: commented out for now to not interfer with Tendermint *)
+    |> handle_receive_consensus_operation
     |> handle_receive_consensus_step
     |> handle_withdraw_proof
     |> handle_ticket_balance

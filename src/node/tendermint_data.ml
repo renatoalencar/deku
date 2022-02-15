@@ -8,7 +8,6 @@ open Tendermint_internals
     Holds all the querying function on the input_log required by Tendermint subprocesses. *)
 
 module CI = Tendermint_internals
-open CI
 
 type round = CI.round
 
@@ -104,22 +103,24 @@ let contains_timeout input_log height step =
     Hashtbl.remove input_log.timeouts (height, step);
     true
 
-(** Tendermin's output_log AKA decision log*)
+(** Tendermint's output_log AKA decision log*)
 module OutputLog = struct
-  type t = (CI.height, CI.value) Hashtbl.t
+  type t = (CI.height, CI.value * CI.round) Hashtbl.t
 
   let empty () : t = Hashtbl.create 0
 
   let contains_nil t height = Hashtbl.find_opt t height |> Option.is_some |> not
 
-  let set t height value =
+  let set t height value round =
     assert (contains_nil t height);
-    Hashtbl.add t height value
+    Hashtbl.add t height (value, round)
 
-  let contains t height block =
+  let get t height = Hashtbl.find_opt t height
+
+  let contains_block t height block =
     match Hashtbl.find_opt t height with
     | None -> false
-    | Some block' -> block = block'
+    | Some (block', _) -> block = block'
 end
 
 type output_log = OutputLog.t

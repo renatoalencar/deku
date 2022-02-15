@@ -37,8 +37,8 @@ type clock = consensus_action option Clock.t
 (** Clocks scheduled for timeouts, to be used in Tendermint *)
 
 let on_timeout_propose (height : CI.height) (round : CI.round)
-    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
-    global_state =
+    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) _dlog
+    _global_state =
   let do_something consensus_state =
     if
       height = consensus_state.CI.height
@@ -57,8 +57,8 @@ let on_timeout_propose (height : CI.height) (round : CI.round)
     None
 
 let on_timeout_prevote (height : CI.height) (round : CI.round)
-    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
-    global_state =
+    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) _dlog
+    _global_state =
   let do_something consensus_state =
     if
       height = consensus_state.CI.height
@@ -77,7 +77,7 @@ let on_timeout_prevote (height : CI.height) (round : CI.round)
     None
 
 let start_round (height : CI.height) (round : CI.round)
-    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
+    (consensus_state : CI.consensus_state) (_msg_log : CD.input_log) _dlog
     global_state =
   consensus_state.CI.round <- round;
   consensus_state.CI.step <- Proposal;
@@ -107,8 +107,8 @@ let start_round (height : CI.height) (round : CI.round)
   return_action
 
 let on_timeout_precommit (height : CI.height) (round : CI.round)
-    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
-    global_state =
+    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) _dlog
+    _global_state =
   let do_something consensus_state =
     if height = consensus_state.CI.height && round = consensus_state.CI.round
     then
@@ -121,17 +121,17 @@ let on_timeout_precommit (height : CI.height) (round : CI.round)
     None
 
 let response_to_proposal (height : CI.height) (round : CI.round)
-    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
+    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) _dlog
     global_state =
   let _height = consensus_state.CI.height in
   let step = consensus_state.CI.step in
   let _round = consensus_state.CI.round in
   let do_something (consensus_state : CI.consensus_state)
       (found_set : CD.MySet.t) =
-    let value, valid_round = CD.MySet.choose found_set in
+    let value, _ = CD.MySet.choose found_set in
     consensus_state.CI.step <- Prevote;
     if
-      !CI.is_valid global_state value
+      CI.is_valid global_state value
       && (consensus_state.locked_round = -1
          || consensus_state.locked_value = value)
     then
@@ -149,8 +149,8 @@ let response_to_proposal (height : CI.height) (round : CI.round)
   else
     Some (do_something consensus_state found_set)
 
-let precommit_failed_previous_round (height : CI.height) (round : CI.round)
-    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
+let precommit_failed_previous_round (_height : CI.height) (_round : CI.round)
+    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) _dlog
     global_state =
   let height = consensus_state.CI.height in
   let step = consensus_state.CI.step in
@@ -159,10 +159,10 @@ let precommit_failed_previous_round (height : CI.height) (round : CI.round)
   let extract_common_set (left_set : CD.MySet.t) (right_set : CD.MySet.t) :
       CD.MySet.t =
     let filtered_left_set =
-      CD.MySet.filter (fun (v, r) -> r >= 0 && r < round) left_set in
+      CD.MySet.filter (fun (_, r) -> r >= 0 && r < round) left_set in
     (* (v, r)*)
     let filtered_right_set =
-      CD.MySet.filter (fun (v, r) -> r >= 0 && r < round) right_set in
+      CD.MySet.filter (fun (_, r) -> r >= 0 && r < round) right_set in
     (* (rv, r)*)
     CD.MySet.filter
       (fun (v, r) -> CD.MySet.mem (CI.repr_of_value v, r) filtered_right_set)
@@ -172,7 +172,7 @@ let precommit_failed_previous_round (height : CI.height) (round : CI.round)
     let value, valid_round = CD.MySet.choose common_set in
     consensus_state.CI.step <- Prevote;
     if
-      !CI.is_valid global_state value
+      CI.is_valid global_state value
       && (consensus_state.locked_round <= valid_round
          || consensus_state.locked_value = value)
     then
@@ -196,7 +196,7 @@ let precommit_failed_previous_round (height : CI.height) (round : CI.round)
 
 let prepare_default_precommit_prevote_phase (height : CI.height)
     (round : CI.round) (consensus_state : CI.consensus_state)
-    (msg_log : CD.input_log) dlog global_state =
+    (msg_log : CD.input_log) _dlog global_state =
   let take_all_prevotes =
     let open Tendermint_data in
     function
@@ -210,14 +210,6 @@ let prepare_default_precommit_prevote_phase (height : CI.height)
   let found_set : CD.MySet.t =
     CD.count_prevotes ~prevote_selection:take_all_prevotes msg_log
       consensus_state global_state in
-  if found_set = CD.MySet.empty then
-    CI.debug global_state "found_set is still empty"
-  else
-    CI.debug global_state
-      (Printf.sprintf
-         "found_set is NOT empty for height %Ld and round %d for step %s" height
-         round
-         (Tendermint_internals.string_of_step consensus_state.step));
   let do_something () =
     Schedule
       (Clock.make CI.prevote_timeout CI.Prevote
@@ -227,8 +219,8 @@ let prepare_default_precommit_prevote_phase (height : CI.height)
   else
     Some (do_something ())
 
-let lock_prevote_phase (height : CI.height) (round : CI.round)
-    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
+let lock_prevote_phase (_height : CI.height) (_round : CI.round)
+    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) _dlog
     global_state =
   let step = consensus_state.CI.step in
   let left_set : CD.MySet.t =
@@ -239,9 +231,9 @@ let lock_prevote_phase (height : CI.height) (round : CI.round)
   let extract_common_set (left_set : CD.MySet.t) (right_set : CD.MySet.t) :
       CD.MySet.t =
     let filtered_left_set =
-      CD.MySet.filter (fun (v, _) -> !CI.is_valid global_state v) left_set in
+      CD.MySet.filter (fun (v, _) -> CI.is_valid global_state v) left_set in
     CD.MySet.filter
-      (fun (v, r) ->
+      (fun (v, _) ->
         CD.MySet.exists (fun (v', _) -> CI.repr_of_value v = v') right_set)
       filtered_left_set in
   let do_something (consensus_state : CI.consensus_state)
@@ -266,15 +258,15 @@ let lock_prevote_phase (height : CI.height) (round : CI.round)
   else
     Some (do_something consensus_state common_set)
 
-let shortcut_prevote_fails (height : CI.height) (round : CI.round)
-    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
+let shortcut_prevote_fails (_height : CI.height) (_round : CI.round)
+    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) _dlog
     global_state =
   let found_set = CD.count_prevotes msg_log consensus_state global_state in
   let find_valid found_set : CD.MySet.t =
     CD.MySet.filter
       (fun (v, r) -> v = CI.nil && r = consensus_state.CI.round)
       found_set in
-  let do_something consensus_state found_set =
+  let do_something consensus_state _found_set =
     consensus_state.CI.step <- CI.Precommit;
     Broadcast
       (CI.PrecommitOP
@@ -286,7 +278,7 @@ let shortcut_prevote_fails (height : CI.height) (round : CI.round)
     Some (do_something consensus_state valid_set)
 
 let prepare_new_round_precommit_fail (height : CI.height) (round : CI.round)
-    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
+    (consensus_state : CI.consensus_state) (msg_log : CD.input_log) _dlog
     global_state =
   let found_set =
     CD.count_precommits msg_log consensus_state global_state
@@ -297,7 +289,7 @@ let prepare_new_round_precommit_fail (height : CI.height) (round : CI.round)
          (on_timeout_precommit height round)) in
   if found_set = CD.MySet.empty then None else Some (do_something ())
 
-let accept_block (height : CI.height) (round : CI.round)
+let accept_block (_height : CI.height) (round : CI.round)
     (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
     global_state =
   let height = consensus_state.CI.height in
@@ -310,28 +302,25 @@ let accept_block (height : CI.height) (round : CI.round)
       global_state in
   let right_set = CD.count_precommits msg_log consensus_state global_state in
   let valid_set = extract_common_set left_set right_set in
-  let do_something (consensus_state : CI.consensus_state)
-      (common_set : CD.MySet.t) =
-    let value, valid_round = CD.MySet.choose valid_set in
-    if !CI.is_valid global_state value then (
-      CD.OutputLog.set dlog height value;
-      (* DEAD CODE FEB 8 consensus_state.CI.height <- Int64.(add consensus_state.CI.height 1L) ;
-         consensus_state.CI.round <- 0;
-         consensus_state.locked_round <- -1 ;
-         consensus_state.locked_value <- CI.nil ;
-         consensus_state.CI.valid_round <- -1 ;
-         consensus_state.CI.valid_value <- CI.nil ; *)
-      Some (RestartTendermint (Int64.add height 1L, 0))
-      (* start_round Int64.(add consensus_state.CI.height 1L) 0 consensus_state msg_log dlog global_state *))
+  let do_something (_consensus_state : CI.consensus_state)
+      (_common_set : CD.MySet.t) =
+    let value, _valid_round = CD.MySet.choose valid_set in
+    if CI.is_valid global_state value then (
+      CD.OutputLog.set dlog height value round;
+      Some (RestartTendermint (Int64.add height 1L, 0)))
     else
       Some DoNothing in
-  if valid_set = CD.MySet.empty || not (CD.OutputLog.contains_nil dlog height)
-  then
+  let c =
+    (* Should we NOT execute the process *)
+    match CD.OutputLog.get dlog height with
+    | Some (_, r) -> r >= round
+    | None -> true in
+  if valid_set = CD.MySet.empty || not c then
     None
   else
     do_something consensus_state valid_set
 
-let handle_node_delay (height : CI.height) (round : CI.round)
+let handle_node_delay (height : CI.height) (_round : CI.round)
     (consensus_state : CI.consensus_state) (msg_log : CD.input_log) dlog
     global_state =
   let actions = CD.count_all_actions msg_log consensus_state global_state in

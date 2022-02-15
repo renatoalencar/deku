@@ -51,24 +51,6 @@ let () =
   CI.produce_value :=
     fun state -> CI.block (Building_blocks.produce_block state)
 
-(* FIXME: bad design *)
-let () =
-  CI.is_valid :=
-    fun state value ->
-      match value with
-      | Nil -> false
-      | Block block -> Building_blocks.is_signable state block
-
-(** Consensus has decided on this block at this height *)
-let is_decided_on (block : Protocol.Block.t) (height : height) cstate =
-  let value = CI.block block in
-  let decision = cstate.output_log in
-  Tendermint_data.OutputLog.contains decision height value
-
-(** Consensus has reached a decision at this height *)
-let has_decided (height : height) cstate =
-  Tendermint_data.OutputLog.contains_nil cstate.output_log height
-
 (** Process messages in the queue and decide actions; pure function, to be interpeted in Lwt later.
     TODO: Ensures that messages received over network go through signature verification before adding them to input_log
     FIXME: we're not empyting the input_log atm *)
@@ -96,7 +78,7 @@ let tendermint_step node =
         (* TODO: this is only valid for the (current) restricted version of Tendermint which does not
            support several cycles/heights running in parallel. *)
         ([], network_actions, RestartAtHeight height)
-      | Some (RestartTendermint (height, round)) ->
+      | Some (RestartTendermint (_height, round)) ->
         ([], network_actions, RestartAtRound round)
       (* Add a new clock to the scheduler *)
       | Some (Schedule c) ->
@@ -139,28 +121,31 @@ let is_valid_consensus_op state consensus_op =
 let broadcast_op state consensus_op =
   let node_address = state.State.identity.t in
   let node_state = state in
+  let s1 = string_of_op consensus_op in
+  let s2 = Crypto.Key_hash.to_string node_address in
+  let hash = Crypto.BLAKE2B.hash (s1 ^ s2) in
+  let signature =
+    Protocol.Signature.sign ~key:node_state.State.identity.secret hash in
   Lwt.async (fun () ->
       let%await () = Lwt_unix.sleep 1.0 in
-      (* TODO: TENDERMINT
-         1. signature du message consensus
-         2. envoyer "signature" du bloc deku-style si precommit*)
-      let%await () =
+      match consensus_op with
+      | PrecommitOP (_height, _round, Block b) ->
+        let hash_signature =
+          Protocol.Signature.sign ~key:node_state.State.identity.secret b.hash
+        in
+        Networking.broadcast_signature node_state
+          {
+            operation = consensus_op;
+            sender = node_address;
+            hash = b.hash;
+            hash_signature;
+            signature;
+          }
+      | _ ->
         Networking.broadcast_consensus_op node_state
-          { operation = consensus_op; sender = node_address } in
-      let%await () =
-        match consensus_op with
-        | PrecommitOP (height, round, Block b) ->
-          Networking.broadcast_signature node_state
-            {
-              hash = b.hash;
-              signature =
-                Protocol.Signature.sign ~key:node_state.State.identity.secret
-                  b.hash;
-            }
-        | _ -> Lwt.return_unit in
-      Lwt.return_unit)
+          { operation = consensus_op; sender = node_address; signature })
 
-let add_consensus_op node update_state sender op =
+let add_consensus_op node _update_state sender op =
   let input_log = node.input_log in
   let input_log =
     add_to_input input_log (CI.height op) (CI.step_of_op op)
@@ -213,5 +198,27 @@ and start_clock current_height node clock =
         Lwt.return_unit);
     { clock with started = true }
   end
+
 let make_proposal height round block =
   CI.ProposalOP (height, round, CI.block block, -1)
+
+let is_decided_on cstate (height : height) =
+  let decision = cstate.output_log in
+  match OutputLog.get decision height with
+  | Some (Block b, round) -> Some (b, round)
+  | _ -> None
+
+(** Required to publish hash on Tezos *)
+let previous_block cstate height =
+  match OutputLog.get cstate.output_log (Int64.sub height 1L) with
+  | Some (Block b, round) -> Some (b, round)
+  | _ -> None
+
+let height_from_op op = Tendermint_internals.height op
+
+let round_from_op op = Tendermint_internals.round op
+
+let get_block cstate height =
+  match OutputLog.get cstate.output_log (Int64.sub height 1L) with
+  | Some (Block b, _) -> b
+  | _ -> failwith (Printf.sprintf "No block here %Ld" height)

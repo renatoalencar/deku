@@ -324,17 +324,8 @@ let info_sign_block =
     "Sign a block hash and broadcast to the network manually, useful when the \
      chain is stale." in
   Term.info "sign-block" ~version:"%\226\128\140%VERSION%%" ~doc ~exits ~man
-let sign_block node_folder block_hash =
-  let%await identity = read_identity ~node_folder in
-  let signature = Signature.sign ~key:identity.secret block_hash in
-  let%await validators_uris = validators_uris node_folder in
-  let%await () =
-    let open Networking in
-    broadcast_to_list
-      (module Signature_spec)
-      validators_uris
-      { hash = block_hash; signature } in
-  Lwt.return (`Ok ())
+let sign_block node_folder block_hash = failwith "To be reimplemented"
+
 let sign_block_term =
   let folder_node =
     let docv = "folder_node" in
@@ -367,15 +358,17 @@ let start_consensus node_folder =
   let block =
     Block.produce ~state:state.protocol ~next_state_root_hash:None
       ~author:address ~operations:[] in
-  (* FIXME: Tendenmint let signature = Block.sign ~key:identity.secret block in *)
   let%await validators_uris = validators_uris node_folder in
   let operation = Node.Tendermint.make_proposal 0L 0 block in
   let%await () =
     let open Networking in
     let sender = Key_hash.of_key identity.key in
+    let signature = Block.sign ~key:identity.secret block in
+    (* Wrong signature but not important here *)
     broadcast_to_list
       (module Networking.Consensus_operation)
-      validators_uris { operation; sender } in
+      validators_uris
+      { operation; sender; signature } in
   prerr_endline "*** Just started consensus";
   Format.printf "block.hash: %s\n%!" (BLAKE2B.to_string block.hash);
   Lwt.return (`Ok ())
@@ -389,30 +382,6 @@ let start_consensus =
   let open Term in
   lwt_ret (const start_consensus $ folder_node)
 
-let produce_block node_folder =
-  let%await identity = read_identity ~node_folder in
-  let%await state = Node_state.get_initial_state ~folder:node_folder in
-  let address = identity.t in
-  let block =
-    Block.produce ~state:state.protocol ~next_state_root_hash:None
-      ~author:address ~operations:[] in
-  let signature = Block.sign ~key:identity.secret block in
-  let%await validators_uris = validators_uris node_folder in
-  let%await () =
-    let open Networking in
-    broadcast_to_list
-      (module Block_and_signature_spec)
-      validators_uris { block; signature } in
-  Format.printf "block.hash: %s\n%!" (BLAKE2B.to_string block.hash);
-  Lwt.return (`Ok ())
-let produce_block =
-  let folder_node =
-    let docv = "folder_node" in
-    let doc = "The folder where the node lives." in
-    let open Arg in
-    required & pos 0 (some string) None & info [] ~doc ~docv in
-  let open Term in
-  lwt_ret (const produce_block $ folder_node)
 let ensure_folder folder =
   let%await exists = Lwt_unix.file_exists folder in
   if exists then

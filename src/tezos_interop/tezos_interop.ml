@@ -202,11 +202,12 @@ end
 module Consensus = struct
   open Pack
   open Tezos_micheline
-  let commit_state_hash ~context ~block_height ~block_payload_hash ~state_hash
-      ~handles_hash ~validators ~signatures =
+  let commit_state_hash ~context ~block_height ~block_round ~block_payload_hash
+      ~state_hash ~handles_hash ~validators ~signatures =
     let module Payload = struct
       type t = {
         block_height : int64;
+        block_round : int;
         block_payload_hash : BLAKE2B.t;
         signatures : string option list;
         handles_hash : BLAKE2B.t;
@@ -232,6 +233,7 @@ module Consensus = struct
     let payload =
       {
         block_height;
+        block_round;
         block_payload_hash;
         signatures;
         handles_hash;

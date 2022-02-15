@@ -1,5 +1,4 @@
 open Helpers
-open Flows
 type t = {
   mutable state : State.t;
   mutable consensus : Tendermint.t;
@@ -23,23 +22,7 @@ let get_port () = (get ()).state.identity.uri |> Uri.port
 let get_state () = (get ()).state
 let set_state state = (get ()).state <- state
 let get_consensus () = (get ()).consensus
-let set_consensus consensus = (get ()).consensus <- consensus
-let rec reset_timeout server =
-  Lwt.cancel server.timeout;
-  server.timeout <-
-    [%await
-      let () = Lwt_unix.sleep 10.0 in
-      (match
-         try_to_produce_block server.state (fun state ->
-             server.state <- state;
-             state)
-       with
-      | Ok () -> ()
-      | Error `Not_current_block_producer -> ());
-      reset_timeout server;
-      Lwt.return_unit]
-;;
-Flows.reset_timeout := fun () -> reset_timeout (get ());;
+let set_consensus consensus = (get ()).consensus <- consensus;;
 Flows.get_state := get_state;;
 Flows.set_state := set_state;;
 Flows.get_consensus := get_consensus;;

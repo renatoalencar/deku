@@ -1,5 +1,4 @@
 module CI = Tendermint_internals
-open CI
 module type COUNTER = sig
   type 'a t
 
