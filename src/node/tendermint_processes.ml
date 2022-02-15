@@ -210,6 +210,14 @@ let prepare_default_precommit_prevote_phase (height : CI.height)
   let found_set : CD.MySet.t =
     CD.count_prevotes ~prevote_selection:take_all_prevotes msg_log
       consensus_state global_state in
+  if found_set = CD.MySet.empty then
+    CI.debug global_state "found_set is still empty"
+  else
+    CI.debug global_state
+      (Printf.sprintf
+         "found_set is NOT empty for height %Ld and round %d for step %s" height
+         round
+         (Tendermint_internals.string_of_step consensus_state.step));
   let do_something () =
     Schedule
       (Clock.make CI.prevote_timeout CI.Prevote

@@ -1,3 +1,4 @@
+open Helpers
 open Tendermint_internals
 open Tendermint_data
 open Tendermint_processes
@@ -58,6 +59,16 @@ let () =
       | Nil -> false
       | Block block -> Building_blocks.is_signable state block
 
+(** Consensus has decided on this block at this height *)
+let is_decided_on (block : Protocol.Block.t) (height : height) cstate =
+  let value = CI.block block in
+  let decision = cstate.output_log in
+  Tendermint_data.OutputLog.contains decision height value
+
+(** Consensus has reached a decision at this height *)
+let has_decided (height : height) cstate =
+  Tendermint_data.OutputLog.contains_nil cstate.output_log height
+
 (** Process messages in the queue and decide actions; pure function, to be interpeted in Lwt later.
     TODO: Ensures that messages received over network go through signature verification before adding them to input_log
     FIXME: we're not empyting the input_log atm *)
@@ -89,6 +100,8 @@ let tendermint_step node =
         ([], network_actions, RestartAtRound round)
       (* Add a new clock to the scheduler *)
       | Some (Schedule c) ->
+        debug node.node_state
+          ("Should start clock for step " ^ string_of_step c.Clock.step);
         let cs =
           IntSet.find_opt node.clocks height |> Option.value ~default:[] in
         (* FIXME: this should not be necessary *)
@@ -126,11 +139,26 @@ let is_valid_consensus_op state consensus_op =
 let broadcast_op state consensus_op =
   let node_address = state.State.identity.t in
   let node_state = state in
-  let open Lwt in
-  async (fun () ->
-      Lwt_unix.sleep 1.0 >>= fun _ ->
-      Networking.broadcast_consensus_op node_state
-        { operation = consensus_op; sender = node_address })
+  Lwt.async (fun () ->
+      let%await () = Lwt_unix.sleep 1.0 in
+      (* TODO: TENDERMINT
+         1. signature du message consensus
+         2. envoyer "signature" du bloc deku-style si precommit*)
+      let%await () =
+        Networking.broadcast_consensus_op node_state
+          { operation = consensus_op; sender = node_address } in
+      let%await () =
+        match consensus_op with
+        | PrecommitOP (height, round, Block b) ->
+          Networking.broadcast_signature node_state
+            {
+              hash = b.hash;
+              signature =
+                Protocol.Signature.sign ~key:node_state.State.identity.secret
+                  b.hash;
+            }
+        | _ -> Lwt.return_unit in
+      Lwt.return_unit)
 
 let add_consensus_op node update_state sender op =
   let input_log = node.input_log in

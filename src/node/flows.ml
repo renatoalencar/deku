@@ -133,6 +133,8 @@ let try_to_produce_block state update_state =
   let state = append_signature state update_state ~signature ~hash:block.hash in
   broadcast_block_and_signature state ~block ~signature;
   Ok ()
+
+(* FIXME: remove me*)
 let try_to_sign_block state update_state block =
   if is_signable state block then (
     let signature = sign ~key:state.identity.secret block in
@@ -326,6 +328,9 @@ let received_consensus_operation state update_state consensus_operation
   Ok ()
 
 let received_consensus_step state update_state sender operation =
+  Tendermint_internals.debug state
+    (Printf.sprintf "received consensus step %s"
+       (Tendermint_internals.string_of_op operation));
   let%ok () =
     Tendermint.is_valid_consensus_op state operation
     |> Result.map_error (fun _msg -> `Not_consensus_operation) in

@@ -16,10 +16,10 @@ let string_of_value = function
 (* TODO: FIXME: Tendermint *)
 let repr_of_value v = v
 
-(* FIXME: Tendermint (this is copied bad design)*)
+(* FIXME: this is copied bad design. *)
 let produce_value : (State.t -> value) ref = ref (fun _ -> assert false)
 
-(* TODO: FIXME: Tendermint *)
+(* FIXME: this is copied bad design. *)
 let is_valid : (State.t -> value -> bool) ref = ref (fun _ -> assert false)
 
 let block b = Block b

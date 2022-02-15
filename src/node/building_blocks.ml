@@ -4,6 +4,7 @@ open Protocol
 module Node = State
 let is_valid_block state block =
   let is_all_operations_properly_signed _block = true in
+  (* FIXME: check signatures for real *)
   let%assert () =
     ( Printf.sprintf
         "new block has a lower block height (%Ld) than the current state (%Ld)"
