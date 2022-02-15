@@ -311,11 +311,11 @@ let accept_block (_height : CI.height) (round : CI.round)
     else
       Some DoNothing in
   let c =
-    (* Should we NOT execute the process *)
+    (* Should we NOT write in the output log *)
     match CD.OutputLog.get dlog height with
     | Some (_, r) -> r >= round
-    | None -> true in
-  if valid_set = CD.MySet.empty || not c then
+    | None -> false in
+  if valid_set = CD.MySet.empty || c then
     None
   else
     do_something consensus_state valid_set

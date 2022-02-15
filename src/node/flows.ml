@@ -175,7 +175,7 @@ let commit state update_state ~block ~hash ~height ~round =
     | None -> ()
     | Some (b, round) ->
       let signatures =
-        Staging_area.get state.Node.staging_area hash (Int64.sub height 1L)
+        Staging_area.get state.Node.staging_area b.hash (Int64.sub height 1L)
           round in
       if List.length signatures = 0 then
         prerr_endline "WHAT THE FUCK NO NO NO NO NO!!!!";
@@ -313,6 +313,7 @@ let received_consensus_step state update_state sender operation =
   let consensus = !get_consensus () in
   let consensus =
     Tendermint.add_consensus_op consensus update_state sender operation in
+
   (* Execute the consensus steps *)
   (* TODO: Tendermint: not sure we should do this here *)
   let consensus = Tendermint.exec_consensus consensus in

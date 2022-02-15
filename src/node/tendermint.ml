@@ -29,7 +29,7 @@ let make identity node_state current_height =
   let clocks = IntSet.create 0 in
   let new_state = CI.fresh_state current_height in
   let states = IntSet.create 0 in
-  IntSet.add states 0L new_state;
+  IntSet.add states current_height new_state;
   let procs = List.map (fun x -> (current_height, x)) all_processes in
   let input_log = CD.empty () in
   let output_log = CD.OutputLog.empty () in
@@ -86,7 +86,6 @@ let tendermint_step node =
           ("Should start clock for step " ^ string_of_step c.Clock.step);
         let cs =
           IntSet.find_opt node.clocks height |> Option.value ~default:[] in
-        (* FIXME: this should not be necessary *)
         IntSet.add node.clocks height (c :: cs);
         exec_procs rest still_active network_actions
     end
@@ -154,6 +153,7 @@ let add_consensus_op node _update_state sender op =
 let rec exec_consensus node =
   let open CI in
   let node, network_actions, should_restart = tendermint_step node in
+
   (* Send all actions over the network *)
   List.iter (broadcast_op node.node_state) network_actions;
   match (node.procs, should_restart) with

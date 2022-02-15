@@ -135,6 +135,6 @@ let get_weight (global_state : State.t) (address : Key_hash.t) =
   else
     0
 
-let proposal_timeout = 1
-let prevote_timeout = 1
-let precommit_timeout = 1
+let proposal_timeout = 5
+let prevote_timeout = 5
+let precommit_timeout = 5
