@@ -20,7 +20,7 @@ let repr_of_value v = v
 let produce_value : (State.t -> value) ref = ref (fun _ -> assert false)
 
 (* TODO: FIXME: Tendermint *)
-let is_valid _ = true
+let is_valid : (State.t -> value -> bool) ref = ref (fun _ -> assert false)
 
 let block b = Block b
 let nil = Nil

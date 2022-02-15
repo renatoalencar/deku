@@ -50,6 +50,14 @@ let () =
   CI.produce_value :=
     fun state -> CI.block (Building_blocks.produce_block state)
 
+(* FIXME: bad design *)
+let () =
+  CI.is_valid :=
+    fun state value ->
+      match value with
+      | Nil -> false
+      | Block block -> Building_blocks.is_signable state block
+
 (** Process messages in the queue and decide actions; pure function, to be interpeted in Lwt later.
     TODO: Ensures that messages received over network go through signature verification before adding them to input_log
     FIXME: we're not empyting the input_log atm *)

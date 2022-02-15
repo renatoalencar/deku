@@ -131,7 +131,7 @@ let response_to_proposal (height : CI.height) (round : CI.round)
     let value, valid_round = CD.MySet.choose found_set in
     consensus_state.CI.step <- Prevote;
     if
-      CI.is_valid value
+      !CI.is_valid global_state value
       && (consensus_state.locked_round = -1
          || consensus_state.locked_value = value)
     then
@@ -172,7 +172,7 @@ let precommit_failed_previous_round (height : CI.height) (round : CI.round)
     let value, valid_round = CD.MySet.choose common_set in
     consensus_state.CI.step <- Prevote;
     if
-      CI.is_valid value
+      !CI.is_valid global_state value
       && (consensus_state.locked_round <= valid_round
          || consensus_state.locked_value = value)
     then
@@ -231,7 +231,7 @@ let lock_prevote_phase (height : CI.height) (round : CI.round)
   let extract_common_set (left_set : CD.MySet.t) (right_set : CD.MySet.t) :
       CD.MySet.t =
     let filtered_left_set =
-      CD.MySet.filter (fun (v, _) -> CI.is_valid v) left_set in
+      CD.MySet.filter (fun (v, _) -> !CI.is_valid global_state v) left_set in
     CD.MySet.filter
       (fun (v, r) ->
         CD.MySet.exists (fun (v', _) -> CI.repr_of_value v = v') right_set)
@@ -305,7 +305,7 @@ let accept_block (height : CI.height) (round : CI.round)
   let do_something (consensus_state : CI.consensus_state)
       (common_set : CD.MySet.t) =
     let value, valid_round = CD.MySet.choose valid_set in
-    if CI.is_valid value then (
+    if !CI.is_valid global_state value then (
       CD.OutputLog.set dlog height value;
       (* DEAD CODE FEB 8 consensus_state.CI.height <- Int64.(add consensus_state.CI.height 1L) ;
          consensus_state.CI.round <- 0;
