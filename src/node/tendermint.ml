@@ -25,7 +25,8 @@ type should_restart_tendermint =
   | RestartAtHeight of CI.height
   | RestartAtRound  of CI.round
 
-let make identity node_state current_height =
+let make node_state current_height =
+  let identity = node_state.State.identity in
   let clocks = IntSet.create 0 in
   let new_state = CI.fresh_state current_height in
   let states = IntSet.create 0 in
@@ -93,8 +94,8 @@ let tendermint_step node =
         ([], network_actions, RestartAtRound round)
       (* Add a new clock to the scheduler *)
       | Some (Schedule c) ->
-        debug node.node_state
-          ("Should start clock for step " ^ string_of_step c.Clock.step);
+        (* debug node.node_state
+          ("Should start clock for step " ^ string_of_step c.Clock.step); *)
         let cs =
           IntSet.find_opt node.clocks height |> Option.value ~default:[] in
         IntSet.add node.clocks height (c :: cs);
@@ -162,6 +163,9 @@ let add_consensus_op node _update_state sender op =
       (CD.content_of_op sender op) in
   { node with input_log }
 let rec exec_consensus node =
+  CI.debug node.node_state
+    (Printf.sprintf "State is currently at height %Ld"
+    (node.node_state.State.protocol.Protocol.block_height));
   let open CI in
   let node, network_actions, should_restart = tendermint_step node in
 
@@ -195,8 +199,8 @@ and start_clock current_height node clock =
   if clock.Clock.started then
     clock
   else begin
-    prerr_endline
-      ("*** Starting clock for step " ^ string_of_step clock.Clock.step);
+    (* prerr_endline
+      ("*** Starting clock for step " ^ string_of_step clock.Clock.step); *)
     async (fun () ->
         Lwt_unix.sleep (float_of_int clock.Clock.time) >>= fun () ->
         let input_log = node.input_log in
@@ -211,6 +215,8 @@ and start_clock current_height node clock =
   end
 
 let make_proposal height round block =
+  prerr_endline (Printf.sprintf "***** Making proposal for height %Ld" height);
+  prerr_endline (Printf.sprintf "***** The block has height %Ld" block.Protocol.Block.block_height);
   CI.ProposalOP (height, round, CI.block block, -1)
 
 let is_decided_on cstate (height : height) =

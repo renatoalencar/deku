@@ -359,7 +359,7 @@ let start_consensus node_folder =
     Block.produce ~state:state.protocol ~next_state_root_hash:None
       ~author:address ~operations:[] in
   let%await validators_uris = validators_uris node_folder in
-  let height = state.protocol.Protocol.block_height in
+  let height = Int64.add state.protocol.Protocol.block_height 1L in
   let operation = Node.Tendermint.make_proposal height 0 block in
   let%await () =
     let open Networking in

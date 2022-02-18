@@ -246,7 +246,7 @@ let commit state update_state ~block ~hash ~height ~round =
 let received_precommit_block state update_state ~consensus_op ~sender ~hash
     ~hash_signature ~signature =
   let module CI = Tendermint_internals in
-  CI.debug state "Received signature";
+  (* CI.debug state "Received signature"; *)
   let height, round =
     ( Tendermint.height_from_op consensus_op,
       Tendermint.round_from_op consensus_op ) in

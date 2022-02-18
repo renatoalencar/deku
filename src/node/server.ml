@@ -7,7 +7,7 @@ type t = {
 let global_server = ref None
 let start ~initial =
   let consensus =
-    Tendermint.make initial.State.identity initial initial.protocol.block_height
+    Tendermint.make initial (Int64.add initial.protocol.block_height 1L)
   in
   match !global_server with
   | Some _ -> failwith "start should be called just once"
