@@ -17,7 +17,6 @@ depends: [
   "dune"              {>= "2.0.0"}
   "dune-configurator"
 ]
-available: arch != "ppc32" & arch != "ppc64" & arch != "s390x" # https://github.com/janestreet/jst-config/pull/3
 synopsis: "Compile-time configuration for Jane Street libraries"
 description: "
 Defines compile-time constants used in Jane Street libraries such as Base, Core, and
@@ -28,6 +27,6 @@ different packages from Jane Street. Future updates may not be backward-compatib
 do not recommend using this package directly.
 "
 url {
-  src: "https://ocaml.janestreet.com/ocaml-core/v0.14/files/jst-config-v0.14.0.tar.gz"
-  checksum: "md5=eefbac104a59bf90c82992cc9fb487d5"
+  src: "https://github.com/janestreet/jst-config/archive/refs/tags/v0.14.1.tar.gz"
+  checksum: "md5=ca0d970356cc99b0a5660058a93ff589"
 }
