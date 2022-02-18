@@ -2,9 +2,6 @@
 
 set -e
 
-LD_LIBRARY_PATH=$(esy x sh -c 'echo $LD_LIBRARY_PATH')
-export LD_LIBRARY_PATH
-
 RPC_NODE=http://localhost:20000
 
 # This secret key never changes.
@@ -13,7 +10,7 @@ SECRET_KEY="edsk3QoqBuvdamxouPhin7swCvkQNgq4jP5KZPbwWNnwdZpSpJiEbq"
 DATA_DIRECTORY="data"
 
 sidecli() {
-  eval dune exec bin/sidecli.exe -- '"$@"'
+  ./_build/default/src/bin/sidecli.exe "$@"
 }
 
 tezos-client() {

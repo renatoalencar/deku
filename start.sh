@@ -4,11 +4,11 @@ set -e
 data_directory="data"
 
 sidecli () {
-  eval dune exec src/bin/sidecli.exe -- '"$@"'
+  ./_build/default/src/bin/sidecli.exe "$@"
 }
 
 deku_node () {
-  eval dune exec src/bin/deku_node.exe -- '"$@"'
+  ./_build/default/src/bin/deku_node.exe "$@"
 }
 
 VALIDATORS=(0 1 2)
