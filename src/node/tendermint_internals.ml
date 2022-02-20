@@ -16,6 +16,12 @@ let string_of_value = function
 (* TODO: FIXME: Tendermint *)
 let repr_of_value v = v
 
+let hash_of_value = function
+  | Nil ->
+    Crypto.BLAKE2B.hash ""
+  | Block b ->
+    b.hash
+
 (* FIXME: this is copied bad design. *)
 let produce_value : (State.t -> value) ref = ref (fun _ -> assert false)
 
@@ -91,6 +97,12 @@ let round = function
   | PrevoteOP (_, r, _)
   | PrecommitOP (_, r, _) ->
     r
+
+let value_of_operation = function
+  | ProposalOP (_, _, v, _)
+  | PrevoteOP (_, _, v)
+  | PrecommitOP (_, _, v) ->
+   v
 
 type consensus_state = {
   mutable height : height;

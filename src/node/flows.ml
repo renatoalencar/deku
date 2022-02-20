@@ -347,25 +347,46 @@ let received_consensus_operation state update_state consensus_operation
   in
   Ok ()
 
-let received_consensus_step state update_state sender operation =
+let received_consensus_step state update_state operation sender hash block_signature
+        message_signature =
+  (* TODO: check message_signature *)
+  let open Tendermint in
   Tendermint_internals.debug state
     (Printf.sprintf "received consensus step %s"
        (Tendermint_internals.string_of_op operation));
   let%ok () =
-    Tendermint.is_valid_consensus_op state operation
+    is_valid_consensus_op state operation
     |> Result.map_error (fun _msg -> `Not_consensus_operation) in
 
   (* TODO: Tendermint, check if already seen this message? AKA enforce unique in input_log? *)
   (* TODO: Tendermint: add and check sender signature? *)
   let consensus = !get_consensus () in
   let consensus =
-    Tendermint.add_consensus_op consensus update_state sender operation in
+    add_consensus_op consensus update_state sender operation in
 
-  (* Execute the consensus steps *)
-  (* TODO: Tendermint: not sure we should do this here *)
-  let consensus = Tendermint.exec_consensus consensus in
+  (* Execute the consensus step and updates the consensus state.
+    In the case this step is a PrecommitOP, we may need to commit the whole block
+    and then reexecute the consensus to decide if we propose a new block! *)
+  let consensus = exec_consensus consensus in
   !set_consensus consensus;
-  Ok ()
+  let open Tendermint_internals in
+  match operation with
+    | PrecommitOP (_height, _round, Block b) ->
+      (* Implicit update of the node state *)
+      let%ok () = received_precommit_block state update_state ~consensus_op:operation ~sender ~hash
+      ~hash_signature:block_signature
+      ~signature:message_signature in
+      (* Not very elegant. We'll probably hide this global state in the future. *)
+      let state = !get_state () in
+      let consensus = { consensus with Tendermint.node_state = state } in
+      debug state (Printf.sprintf "Received a precommit. Start a new height here? Consensus.node_state has height %Ld"
+        (consensus.Tendermint.node_state.State.protocol.Protocol.block_height));
+      (* Rexec the consensus in case we need to send a proposal *)
+      let consensus = exec_consensus consensus in
+      !set_consensus consensus;
+      Ok ()
+    | _ ->
+      Ok ()
 
 let find_block_level state = state.State.protocol.block_height
 let request_nonce state update_state uri =

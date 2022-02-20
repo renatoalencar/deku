@@ -78,18 +78,7 @@ let tendermint_step node =
         (* Start new processes and forget about the older ones *)
         (* TODO: this is only valid for the (current) restricted version of Tendermint which does not
            support several cycles/heights running in parallel. *)
-        let network_actions =
-          network_actions
-          |> List.map (fun c_op ->
-                 match c_op with
-                 | ProposalOP (h, _, _, _) -> (c_op, h, height)
-                 | PrevoteOP (h, _, _) -> (c_op, h, height)
-                 | PrecommitOP (h, _, _) -> (c_op, h, height))
-          |> List.filter_map (fun (c_op, h1, h2) ->
-                 match h1 < h2 with
-                 | true -> None
-                 | false -> Some c_op) in
-        ([], network_actions, RestartAtHeight height)
+        ([], [], RestartAtHeight height)
       | Some (RestartTendermint (_height, round)) ->
         ([], network_actions, RestartAtRound round)
       (* Add a new clock to the scheduler *)
@@ -134,27 +123,25 @@ let broadcast_op state consensus_op =
   let node_state = state in
   let s1 = string_of_op consensus_op in
   let s2 = Crypto.Key_hash.to_string node_address in
-  let hash = Crypto.BLAKE2B.hash (s1 ^ s2) in
-  let signature =
-    Protocol.Signature.sign ~key:node_state.State.identity.secret hash in
+  let operation_hash = Crypto.BLAKE2B.hash (s1 ^ s2) in
+  let operation_signature =
+    Protocol.Signature.sign ~key:node_state.State.identity.secret operation_hash
+  in
+  (* Hashes and sign the value even if it's nil *)
+  let block_hash = CI.hash_of_value (CI.value_of_operation consensus_op) in
+  let block_signature =
+    Protocol.Signature.sign ~key:node_state.State.identity.secret block_hash
+  in
   Lwt.async (fun () ->
       let%await () = Lwt_unix.sleep 1.0 in
-      match consensus_op with
-      | PrecommitOP (_height, _round, Block b) ->
-        let hash_signature =
-          Protocol.Signature.sign ~key:node_state.State.identity.secret b.hash
-        in
-        Networking.broadcast_signature node_state
+      Networking.broadcast_consensus_op node_state
           {
             operation = consensus_op;
             sender = node_address;
-            hash = b.hash;
-            hash_signature;
-            signature;
-          }
-      | _ ->
-        Networking.broadcast_consensus_op node_state
-          { operation = consensus_op; sender = node_address; signature })
+            hash = block_hash;
+            block_signature;
+            operation_signature;
+          })
 
 let add_consensus_op node _update_state sender op =
   let input_log = node.input_log in
@@ -183,7 +170,8 @@ let rec exec_consensus node =
     let new_state = CI.fresh_state new_height in
     IntSet.add node.consensus_states new_height new_state;
     let new_processes = List.map (fun p -> (new_height, p)) all_processes in
-    exec_consensus { node with procs = new_processes }
+    { node with procs = new_processes }
+    (* exec_consensus { node with procs = new_processes } *)
   | _ ->
     (* Start the non-started clocks *)
     IntSet.map_inplace

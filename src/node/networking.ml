@@ -58,7 +58,9 @@ module Consensus_operation = struct
   type request = {
     operation : Tendermint_internals.sidechain_consensus_op;
     sender : Crypto.Key_hash.t;
-    signature : Signature.t;
+    hash : BLAKE2B.t;
+    block_signature : Signature.t;
+    operation_signature : Signature.t;
   }
   [@@deriving yojson]
   type response = unit [@@deriving yojson]
