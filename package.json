@@ -52,7 +52,6 @@
     "@opam/ocamlformat": "0.19.0",
     "@opam/utop": "^2.8.0",
     "@opam/menhir": "20210419",
-    "@reason-native/rely": "^3.2.1",
     "@opam/ocamlformat-rpc": "*"
   },
   "resolutions": {

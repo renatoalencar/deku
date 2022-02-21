@@ -41,13 +41,14 @@ let broadcast_to_validators endpoint state data =
   |> List.filter_map (fun Validators.{ address; _ } ->
          Address_map.find_opt address state.validators_uri)
   |> fun uris -> broadcast_to_list endpoint uris data
+
 module Signature_spec = struct
   type request = {
     operation : Tendermint_internals.sidechain_consensus_op;
     sender : Crypto.Key_hash.t;
     hash : BLAKE2B.t;
-    hash_signature : Signature.t;
-    signature : Signature.t;
+    block_signature : Signature.t;
+    message_signature : Signature.t;
   }
   [@@deriving yojson]
   type response = unit [@@deriving yojson]

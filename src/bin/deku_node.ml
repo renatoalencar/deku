@@ -39,9 +39,11 @@ let handle_receive_consensus_step =
       let open Flows in
       let%ok () =
         received_consensus_step (Server.get_state ()) update_state
-          request.sender request.operation in
+         request.operation request.sender request.hash request.block_signature
+        request.operation_signature in
       Ok ())
 
+(*
 let handle_received_precommit_block =
   handle_request
     (module Networking.Signature_spec)
@@ -57,6 +59,7 @@ let handle_received_precommit_block =
           ~signature:request.signature
         |> ignore_some_errors in
       Ok ())
+*)
 
 let handle_block_level =
   handle_request
@@ -128,7 +131,7 @@ let node folder =
     App.empty
     |> App.port (Node.Server.get_port () |> Option.get)
     |> handle_block_level
-    |> handle_received_precommit_block
+    (* |> handle_received_precommit_block *)
     |> handle_protocol_snapshot
     |> handle_request_nonce
     |> handle_register_uri
