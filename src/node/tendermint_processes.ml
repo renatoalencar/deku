@@ -7,12 +7,15 @@ module Clock = struct
   type 'a t = {
     time : int;
     step : CI.consensus_step;
+    height : CI.height;
+    round : CI.round;
     on_timeout :
       CI.consensus_state -> CD.input_log -> CD.output_log -> State.t -> 'a;
     started : bool;
   }
 
-  let make time step on_timeout = { time; step; on_timeout; started = false }
+  let make time step height round on_timeout = { time; step; on_timeout; started = false ; height ;
+  round }
 end
 
 (* Values returned by processes, to be interpreted by the node as network
@@ -102,7 +105,7 @@ let start_round (height : CI.height) (round : CI.round)
     else
       Some
         (Schedule
-           (Clock.make CI.proposal_timeout CI.Proposal
+           (Clock.make CI.proposal_timeout CI.Proposal height round
               (on_timeout_propose height round))) in
   return_action
 
@@ -212,7 +215,7 @@ let prepare_default_precommit_prevote_phase (height : CI.height)
       consensus_state global_state in
   let do_something () =
     Schedule
-      (Clock.make CI.prevote_timeout CI.Prevote
+      (Clock.make CI.prevote_timeout CI.Prevote height round
          (on_timeout_prevote height round)) in
   if found_set = CD.MySet.empty || consensus_state.CI.step <> CI.Prevote then
     None
@@ -285,7 +288,7 @@ let prepare_new_round_precommit_fail (height : CI.height) (round : CI.round)
     |> CD.MySet.filter (fun (_, r) -> r = consensus_state.CI.round) in
   let do_something () =
     Schedule
-      (Clock.make CI.precommit_timeout CI.Precommit
+      (Clock.make CI.precommit_timeout CI.Precommit height round
          (on_timeout_precommit height round)) in
   if found_set = CD.MySet.empty then None else Some (do_something ())
 

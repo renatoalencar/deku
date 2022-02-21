@@ -166,7 +166,6 @@ let rec exec_consensus node =
     let new_processes = List.map (fun p -> (cur_height, p)) all_processes in
     exec_consensus { node with procs = new_processes }
   | [], RestartAtHeight new_height ->
-    (* If we no longer have any active process, we start at  *)
     let new_state = CI.fresh_state new_height in
     IntSet.add node.consensus_states new_height new_state;
     let new_processes = List.map (fun p -> (new_height, p)) all_processes in
@@ -175,13 +174,11 @@ let rec exec_consensus node =
   | _ ->
     (* Start the non-started clocks *)
     IntSet.map_inplace
-      (fun height clocks -> List.map (start_clock height node) clocks)
+      (fun height clocks -> List.map (fun c -> start_clock node c.Clock.height c.Clock.round c) clocks)
       node.clocks;
     node
 
-(* FIXME:? check for race conditions
-   TODO: find a responsible adult to talk to about this.*)
-and start_clock current_height node clock =
+and start_clock node clock_height clock_round clock =
   let open Lwt in
   let open Tendermint_processes in
   if clock.Clock.started then
@@ -190,15 +187,22 @@ and start_clock current_height node clock =
     (* prerr_endline
       ("*** Starting clock for step " ^ string_of_step clock.Clock.step); *)
     async (fun () ->
-        Lwt_unix.sleep (float_of_int clock.Clock.time) >>= fun () ->
-        let input_log = node.input_log in
-        let _ =
-          add_to_input input_log current_height clock.Clock.step CD.Timeout
-        in
-        let new_node = exec_consensus node in
-        (* FIXME: ? I don't want this to be mutable *)
-        node.procs <- new_node.procs;
-        Lwt.return_unit);
+        Lwt_unix.sleep (* float_of_int clock.Clock.time *) 2. >>= fun () ->
+        (* Checks that the clock is still relevant *)
+        let current_height = current_height node in
+        (* FIXME: fragile code; we should fix the whole way we handle clocks with Lwt *)
+        let current_round = (IntSet.find node.consensus_states current_height).CI.round in
+        if current_height > clock_height || current_round > clock_round then
+          Lwt.return_unit
+        else
+          let input_log = node.input_log in
+          let _ =
+            add_to_input input_log clock_height clock.Clock.step CD.Timeout
+          in
+          let new_node = exec_consensus node in
+          (* FIXME: ? I don't want this to be mutable *)
+          node.procs <- new_node.procs;
+          Lwt.return_unit);
     { clock with started = true }
   end
 
