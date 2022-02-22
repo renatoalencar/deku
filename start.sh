@@ -1,6 +1,6 @@
 #! /bin/bash
 
-set -e 
+set -e
 data_directory="data"
 
 LD_LIBRARY_PATH=$(esy x sh -c 'echo $LD_LIBRARY_PATH')
@@ -26,15 +26,14 @@ done
 
 sleep 1
 
-echo "Producing a block"
-HASH=$(sidecli produce-block "$data_directory/0" | awk '{ print $2 }')
+HASH=$(sidecli start-consensus "$data_directory/0" | awk '{ print $2 }')
 
 sleep 0.1
 
-echo "Signing"
-for i in ${VALIDATORS[@]}; do
-  sidecli sign-block "$data_directory/$i" $HASH
-done
+#echo "Signing"
+#for i in ${VALIDATORS[@]}; do
+#  sidecli sign-block "$data_directory/$i" $HASH
+#done
 
 for PID in ${SERVERS[@]}; do
   wait $PID

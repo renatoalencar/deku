@@ -13,6 +13,7 @@ let handle_request (type req res)
       with type request = req
        and type response = res) handler =
   let handler request =
+    prerr_endline "handle_request";
     let%await body = Dream.body request in
     match body |> Yojson.Safe.from_string |> E.request_of_yojson with
     | Ok request -> (
@@ -24,35 +25,37 @@ let handle_request (type req res)
     | Error err -> raise (Failure err) in
   Dream.post E.path handler
 
-let handle_received_block_and_signature =
+(** Consensus step as defined by Tendermint. *)
+let handle_receive_consensus_step =
   handle_request
-    (module Networking.Block_and_signature_spec)
+    (module Networking.Consensus_operation)
     (fun update_state request ->
+      prerr_endline "handle receive";
       let open Flows in
       let%ok () =
-        received_block (Server.get_state ()) update_state request.block
-        |> ignore_some_errors in
-      let%ok () =
-        received_signature (Server.get_state ()) update_state
-          ~hash:request.block.hash ~signature:request.signature
-        |> ignore_some_errors in
+        received_consensus_step (Server.get_state ()) update_state
+         request.operation request.sender request.hash request.block_signature
+        request.operation_signature in
       Ok ())
-let handle_received_signature =
+
+(*
+let handle_received_precommit_block =
   handle_request
     (module Networking.Signature_spec)
     (fun update_state request ->
       let open Flows in
       let%ok () =
-        received_signature (Server.get_state ()) update_state ~hash:request.hash
+        received_consensus_step (Server.get_state ()) update_state
+          request.sender request.operation in
+      let%ok () =
+        received_precommit_block (Server.get_state ()) update_state
+          ~consensus_op:request.operation ~sender:request.sender
+          ~hash:request.hash ~hash_signature:request.hash_signature
           ~signature:request.signature
         |> ignore_some_errors in
       Ok ())
-let handle_block_by_hash =
-  handle_request
-    (module Networking.Block_by_hash_spec)
-    (fun _update_state request ->
-      let block = Flows.find_block_by_hash (Server.get_state ()) request.hash in
-      Ok block)
+*)
+
 let handle_block_level =
   handle_request
     (module Networking.Block_level)
@@ -68,8 +71,7 @@ let handle_protocol_snapshot =
           snapshot = snapshots.current_snapshot;
           additional_blocks = snapshots.additional_blocks;
           last_block = snapshots.last_block;
-          last_block_signatures =
-            Signatures.to_list snapshots.last_block_signatures;
+          last_block_signatures = snapshots.last_block_signatures;
         })
 let handle_request_nonce =
   handle_request
@@ -122,18 +124,18 @@ let node folder =
   Node.Server.start ~initial:node;
   Dream.initialize_log ~level:`Warning ();
   let port = Node.Server.get_port () |> Option.get in
+  prerr_endline "foo";
   Dream.run ~port
   @@ Dream.router
        [
          handle_block_level;
-         handle_received_block_and_signature;
-         handle_received_signature;
-         handle_block_by_hash;
+         (* handle_received_signature; *)
          handle_protocol_snapshot;
          handle_request_nonce;
          handle_register_uri;
          handle_receive_user_operation_gossip;
          handle_receive_consensus_operation;
+         handle_receive_consensus_step;
          handle_withdraw_proof;
          handle_ticket_balance;
          handle_trusted_validators_membership;

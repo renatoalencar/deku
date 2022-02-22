@@ -18,7 +18,7 @@ sidecli() {
 }
 
 tezos-client() {
-  docker exec -it deku_flextesa_1 tezos-client "$@"
+  docker exec -it my-sandbox tezos-client "$@"
 }
 
 ligo() {
@@ -95,11 +95,12 @@ create_new_deku_environment() {
     cat <<EOF
 {
   root_hash = {
-    current_block_hash = 0x;
-    current_block_height = 0;
-    current_state_hash = 0x;
-    current_handles_hash = 0x;
-    current_validators = [
+    snapshotted_block_hash = 0x;
+    snapshotted_block_height = 0n;
+    snapshotted_block_round = 0n;
+    snapshotted_state_hash = 0x;
+    snapshotted_handles_hash = 0x;
+    snapshotted_validators = [
 EOF
     ## this iteration is done here just to ensure the indentation
     for VALIDATOR in ${VALIDATORS[@]}; do
@@ -166,6 +167,11 @@ tear-down() {
 
 start_node() {
   tear-down
+  message "Starting sandbox"
+  docker run --rm --name my-sandbox --detach -p 20000:20000 \
+    tqtezos/flextesa:20210602 granabox start
+  sleep 3
+  message "Sandbox started"
   message "Configuring Tezos client"
   tezos-client --endpoint $RPC_NODE bootstrapped
   tezos-client --endpoint $RPC_NODE config update
