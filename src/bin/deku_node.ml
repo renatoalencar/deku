@@ -39,8 +39,8 @@ let handle_receive_consensus_step =
       let open Flows in
       let%ok () =
         received_consensus_step (Server.get_state ()) update_state
-         request.operation request.sender request.hash request.block_signature
-        request.operation_signature in
+          request.operation request.sender request.hash request.block_signature
+          request.operation_signature in
       Ok ())
 
 (*
@@ -66,6 +66,7 @@ let handle_block_level =
     (module Networking.Block_level)
     (fun _update_state _request ->
       Ok { level = Flows.find_block_level (Server.get_state ()) })
+
 let handle_protocol_snapshot =
   handle_request
     (module Networking.Protocol_snapshot)

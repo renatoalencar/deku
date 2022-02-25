@@ -42,19 +42,6 @@ let broadcast_to_validators endpoint state data =
          Address_map.find_opt address state.validators_uri)
   |> fun uris -> broadcast_to_list endpoint uris data
 
-module Signature_spec = struct
-  type request = {
-    operation : Tendermint_internals.sidechain_consensus_op;
-    sender : Crypto.Key_hash.t;
-    hash : BLAKE2B.t;
-    block_signature : Signature.t;
-    message_signature : Signature.t;
-  }
-  [@@deriving yojson]
-  type response = unit [@@deriving yojson]
-  let path = "/append-signature"
-end
-
 module Consensus_operation = struct
   type request = {
     operation : Tendermint_internals.sidechain_consensus_op;
@@ -167,7 +154,6 @@ let request_protocol_snapshot = request (module Protocol_snapshot)
 let request_nonce = request (module Request_nonce)
 let request_register_uri = request (module Register_uri)
 let request_withdraw_proof = request (module Withdraw_proof)
-let broadcast_signature = broadcast_to_validators (module Signature_spec)
 let broadcast_consensus_op =
   broadcast_to_validators (module Consensus_operation)
 let broadcast_user_operation_gossip =

@@ -367,11 +367,11 @@ let start_consensus node_folder =
     let s1 = Node.Tendermint_internals.string_of_op operation in
     let s2 = Crypto.Key_hash.to_string address in
     let hash = Crypto.BLAKE2B.hash (s1 ^ s2) in
-    let operation_signature = Protocol.Signature.sign ~key:state.identity.secret hash in
-    let block_hash = Node.Tendermint_internals.hash_of_value (Node.Tendermint_internals.value_of_operation operation) in
+    let operation_signature =
+      Protocol.Signature.sign ~key:state.identity.secret hash in
+    let block_hash = Tendermint_internals.hash_of_consensus_value operation in
     let block_signature =
-      Protocol.Signature.sign ~key:state.identity.secret block_hash
-  in
+      Protocol.Signature.sign ~key:state.identity.secret block_hash in
     broadcast_to_list
       (module Networking.Consensus_operation)
       validators_uris
