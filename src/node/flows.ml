@@ -156,7 +156,8 @@ let request_previous_blocks state block =
     pending := true;
     request_protocol_snapshot ())
 
-let try_to_commit_state_hash ~prev_validators state block round signatures =
+let try_to_commit_state_hash ~prev_validators state block hash round signatures
+    =
   let open Node in
   let signatures_map =
     signatures
@@ -179,15 +180,15 @@ let try_to_commit_state_hash ~prev_validators state block round signatures =
   in
   Lwt.async (fun () ->
       let%await () =
+        (* FIXME: this can't be good *)
         match state.identity.t = block.Block.author with
         | true -> Lwt.return_unit
         | false -> Lwt_unix.sleep 120.0 in
-      (* FIXME: this can't be good *)
       Tezos_interop.Consensus.commit_state_hash
         ~context:state.Node.interop_context ~block_height:block.block_height
-        ~block_round:round ~block_payload_hash:block.payload_hash
-        ~handles_hash:block.handles_hash ~state_hash:block.state_root_hash
-        ~validators ~signatures)
+        ~block_round:round ~block_payload_hash:block.hash
+        ~handles_hash:block.handles_hash ~checked_hash:hash ~validators
+        ~signatures)
 
 let signatures_required state =
   let number_of_validators = Validators.length state.Node.protocol.validators in
@@ -215,19 +216,24 @@ let commit state update_state ~block ~hash ~height ~round =
 
   (* For security reason, we commit to tezos a block later *)
   (* FIXME: this has to change when validator governance is live. *)
+  let prev_height = Int64.sub height 1L in
   let () =
-    match Tendermint.previous_block (!get_consensus ()) height with
+    match Tendermint.get_block_opt (!get_consensus ()) prev_height with
     | None -> ()
     | Some (b, round) ->
+      let previous_hash =
+        Tendermint_internals.compute_hash b.Block.hash prev_height round in
       let signatures =
-        Staging_area.get state.Node.staging_area b.hash (Int64.sub height 1L)
-          round in
+        Staging_area.get state.Node.staging_area previous_hash prev_height round
+      in
       if List.length signatures = 0 then
         prerr_endline
           "This should never be printed, there should be signatures at this \
            time.";
       try_to_commit_state_hash ~prev_validators:prev_protocol.validators state b
-        round signatures in
+        previous_hash round signatures in
+  (* Tendermint_internals.debug state
+     (Printf.sprintf "About to apply a block of height %Ld!" (block.Block.block_height)); *)
   let%ok state = apply_block state update_state block in
   (* Save the state *)
   write_state_to_file (state.Node.data_folder ^ "/state.bin") state.protocol;
@@ -244,44 +250,52 @@ let commit state update_state ~block ~hash ~height ~round =
 
 (** Receives a signature for a block after a Tendermint PRECOMMIT step for given height and round *)
 let received_precommit_block state update_state ~consensus_op ~sender ~hash
-    ~hash_signature ~signature =
+    ~hash_signature ~consensus_signature =
   let module CI = Tendermint_internals in
-  (* CI.debug state "Received signature"; *)
   let height, round =
     ( Tendermint.height_from_op consensus_op,
       Tendermint.round_from_op consensus_op ) in
+  (* We check for the signature of the *hash* of the received hash, as this
+     is also what Tezos does. *)
+  let dbl_hash = Crypto.BLAKE2B.hash (Crypto.BLAKE2B.to_raw_string hash) in
   let%assert () =
     ( `Invalid_signature_for_this_hash,
-      Signature.verify ~signature:hash_signature hash ) in
-  let s1 = Tendermint_internals.string_of_op consensus_op in
-  let s2 = Crypto.Key_hash.to_string sender in
-  let message_hash = Crypto.BLAKE2B.hash (s1 ^ s2) in
+      Signature.verify ~signature:hash_signature dbl_hash ) in
+  let message_hash =
+    Tendermint_internals.hash_of_consensus_op consensus_op sender in
   let%assert () =
-    (`Invalid_signature_for_this_hash, Signature.verify ~signature message_hash)
-  in
+    ( `Invalid_signature_for_this_hash,
+      Signature.verify ~signature:consensus_signature message_hash ) in
   let%assert () =
-    (`Signed_by_unauthorized_validator, is_authorized_validator state ~signature)
-  in
+    ( `Signed_by_unauthorized_validator,
+      is_authorized_validator state ~signature:consensus_signature ) in
   let%assert () =
     ( `Already_known_signature,
-      not (is_known_signature state ~hash ~signature ~height ~round) ) in
+      not
+        (is_known_signature state ~hash ~signature:hash_signature ~height ~round)
+    ) in
   let check_state_root_hash block =
     block_matches_current_state_root_hash state block
     || block_matches_next_state_root_hash state block in
+  let check_hash block hash round =
+    let h1 = Tendermint_internals.compute_hash block.Block.hash height round in
+    h1 = hash in
   match Tendermint.is_decided_on (!get_consensus ()) height with
-  | Some (block, _round) when block.hash <> hash ->
+  | Some (block, round) when not (check_hash block hash round) ->
     Result.Error
       (`Invalid_block "Block hash does not match decision made by consensus")
   | Some (block, _round) when not (check_state_root_hash block) ->
     Result.error `Invalid_state_root_hash
   | None ->
     let _ =
-      append_signature state update_state ~hash ~signature ~height ~round in
+      append_signature state update_state ~hash ~signature:hash_signature
+        ~height ~round in
     Ok ()
   | Some (block, _) ->
     (* The block has been decided on, is valid, and we have enough signatures to commit *)
     let _ =
-      append_signature state update_state ~hash ~signature ~height ~round in
+      append_signature state update_state ~hash ~signature:hash_signature
+        ~height ~round in
     commit state update_state ~block ~hash ~height ~round
 
 let parse_internal_tezos_transaction transaction =
@@ -347,13 +361,13 @@ let received_consensus_operation state update_state consensus_operation
   in
   Ok ()
 
-let received_consensus_step state update_state operation sender hash block_signature
-        message_signature =
+let received_consensus_step state update_state operation sender hash
+    block_signature message_signature =
   (* TODO: check message_signature *)
   let open Tendermint in
-  Tendermint_internals.debug state
-    (Printf.sprintf "received consensus step %s"
-       (Tendermint_internals.string_of_op operation));
+  (* Tendermint_internals.debug state
+     (Printf.sprintf "received consensus step %s"
+        (Tendermint_internals.string_of_op operation)); *)
   let%ok () =
     is_valid_consensus_op state operation
     |> Result.map_error (fun _msg -> `Not_consensus_operation) in
@@ -361,32 +375,29 @@ let received_consensus_step state update_state operation sender hash block_signa
   (* TODO: Tendermint, check if already seen this message? AKA enforce unique in input_log? *)
   (* TODO: Tendermint: add and check sender signature? *)
   let consensus = !get_consensus () in
-  let consensus =
-    add_consensus_op consensus update_state sender operation in
+  let consensus = add_consensus_op consensus update_state sender operation in
 
   (* Execute the consensus step and updates the consensus state.
-    In the case this step is a PrecommitOP, we may need to commit the whole block
-    and then reexecute the consensus to decide if we propose a new block! *)
+     In the case this step is a PrecommitOP, we may need to commit the whole block
+     and then reexecute the consensus to decide if we propose a new block! *)
   let consensus = exec_consensus consensus in
   !set_consensus consensus;
   let open Tendermint_internals in
   match operation with
-    | PrecommitOP (_height, _round, Block b) ->
-      (* Implicit update of the node state *)
-      let%ok () = received_precommit_block state update_state ~consensus_op:operation ~sender ~hash
-      ~hash_signature:block_signature
-      ~signature:message_signature in
-      (* Not very elegant. We'll probably hide this global state in the future. *)
-      let state = !get_state () in
-      let consensus = { consensus with Tendermint.node_state = state } in
-      debug state (Printf.sprintf "Received a precommit. Start a new height here? Consensus.node_state has height %Ld"
-        (consensus.Tendermint.node_state.State.protocol.Protocol.block_height));
-      (* Rexec the consensus in case we need to send a proposal *)
-      let consensus = exec_consensus consensus in
-      !set_consensus consensus;
-      Ok ()
-    | _ ->
-      Ok ()
+  | PrecommitOP (_height, _round, Block b) ->
+    (* Implicitly updates the node state *)
+    let%ok () =
+      received_precommit_block state update_state ~consensus_op:operation
+        ~sender ~hash ~hash_signature:block_signature
+        ~consensus_signature:message_signature in
+    (* Not very elegant. We'll probably hide this global state in the future. *)
+    let state = !get_state () in
+    let consensus = { consensus with Tendermint.node_state = state } in
+    (* Rexec the consensus in case we need to send a proposal *)
+    let consensus = exec_consensus consensus in
+    !set_consensus consensus;
+    Ok ()
+  | _ -> Ok ()
 
 let find_block_level state = state.State.protocol.block_height
 let request_nonce state update_state uri =

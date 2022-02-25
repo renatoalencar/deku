@@ -7,8 +7,7 @@ type t = {
 let global_server = ref None
 let start ~initial =
   let consensus =
-    Tendermint.make initial (Int64.add initial.protocol.block_height 1L)
-  in
+    Tendermint.make initial (Int64.add initial.protocol.block_height 1L) in
   match !global_server with
   | Some _ -> failwith "start should be called just once"
   | None ->
@@ -27,7 +26,8 @@ let set_state state =
   let server_state = get () in
   let current_consensus = server_state.consensus in
   server_state.state <- state;
-  server_state.consensus <- { current_consensus with Tendermint.node_state = state }
+  server_state.consensus <-
+    { current_consensus with Tendermint.node_state = state }
 
 let _ = Flows.get_state := get_state
 let _ = Flows.set_state := set_state
