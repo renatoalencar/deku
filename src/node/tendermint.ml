@@ -84,15 +84,15 @@ let tendermint_step node =
       (* Add a new clock to the scheduler *)
       | Some (Schedule c) ->
         (* debug node.node_state
-          ("Should start clock for step " ^ string_of_step c.Clock.step); *)
+           ("Should start clock for step " ^ string_of_step c.Clock.step); *)
         let cs =
           IntSet.find_opt node.clocks height |> Option.value ~default:[] in
         IntSet.add node.clocks height (c :: cs);
         exec_procs rest still_active network_actions
     end
     | [] -> (still_active, network_actions, DontRestart) in
-  let () = CI.debug node.node_state (Printf.sprintf "I have %d processes to execute" (List.length
-  node.procs)) in
+  (* let () = CI.debug node.node_state (Printf.sprintf "I have %d processes to execute" (List.length
+     node.procs)) in *)
   let still_active, network_actions, should_restart =
     exec_procs node.procs [] [] in
   (* TODO: I don't want this to be mutable *)
@@ -120,30 +120,32 @@ let is_valid_consensus_op state consensus_op =
   else
     ok ()
 
+(** Hashes stuff and broadcast the corresponding consensus operation *)
 let broadcast_op state consensus_op =
+  (* We need two hashes: one corresponding to the block, height and round, which will ultimately get
+     posted on Tezos; and one of the consensus operation *)
   let node_address = state.State.identity.t in
-  let node_state = state in
-  let s1 = string_of_op consensus_op in
-  let s2 = Crypto.Key_hash.to_string node_address in
-  let operation_hash = Crypto.BLAKE2B.hash (s1 ^ s2) in
+  let secret_key = state.State.identity.secret in
+  (* Hashing the operation *)
+  let operation_hash = CI.hash_of_consensus_op consensus_op node_address in
   let operation_signature =
-    Protocol.Signature.sign ~key:node_state.State.identity.secret operation_hash
-  in
-  (* Hashes and sign the value even if it's nil *)
-  let block_hash = CI.hash_of_value (CI.value_of_operation consensus_op) in
-  let block_signature =
-    Protocol.Signature.sign ~key:node_state.State.identity.secret block_hash
-  in
+    Protocol.Signature.sign ~key:secret_key operation_hash in
+  (* Hash the value+height+round even if it's nil *)
+  let block_hash = CI.hash_of_consensus_value consensus_op in
+  (* Sign the *hash* of this because of how the signature is checked on Tezos *)
+  let hash_hash =
+    Crypto.BLAKE2B.hash (Crypto.BLAKE2B.to_raw_string block_hash) in
+  let block_signature = Protocol.Signature.sign ~key:secret_key hash_hash in
   Lwt.async (fun () ->
       let%await () = Lwt_unix.sleep 1.0 in
-      Networking.broadcast_consensus_op node_state
-          {
-            operation = consensus_op;
-            sender = node_address;
-            hash = block_hash;
-            block_signature;
-            operation_signature;
-          })
+      Networking.broadcast_consensus_op state
+        {
+          operation = consensus_op;
+          sender = node_address;
+          hash = block_hash;
+          block_signature;
+          operation_signature;
+        })
 
 let add_consensus_op node _update_state sender op =
   let input_log = node.input_log in
@@ -154,8 +156,8 @@ let add_consensus_op node _update_state sender op =
 
 let rec exec_consensus node =
   (* CI.debug node.node_state
-    (Printf.sprintf "State is currently at height %Ld"
-    (node.node_state.State.protocol.Protocol.block_height)); *)
+     (Printf.sprintf "State is currently at height %Ld"
+     (node.node_state.State.protocol.Protocol.block_height)); *)
   let open CI in
   let node, network_actions, should_restart = tendermint_step node in
 
@@ -177,7 +179,10 @@ let rec exec_consensus node =
   | _ ->
     (* Start the non-started clocks *)
     IntSet.map_inplace
-      (fun height clocks -> List.map (fun c -> start_clock node c.Clock.height c.Clock.round c) clocks)
+      (fun height clocks ->
+        List.map
+          (fun c -> start_clock node c.Clock.height c.Clock.round c)
+          clocks)
       node.clocks;
     node
 
@@ -187,20 +192,23 @@ and start_clock node clock_height clock_round clock =
   if clock.Clock.started then
     clock
   else begin
-    CI.debug node.node_state (Printf.sprintf "Starting clock for step %s height %Ld round %d"
-    (CI.string_of_step clock.Clock.step) clock_height clock_round);
+    (* CI.debug node.node_state (Printf.sprintf "Starting clock for step %s height %Ld round %d"
+       (CI.string_of_step clock.Clock.step) clock_height clock_round); *)
     async (fun () ->
         Lwt_unix.sleep (* float_of_int clock.Clock.time *) 2. >>= fun () ->
         (* Checks that the clock is still relevant *)
         let current_height = current_height node in
         (* FIXME: fragile code; we should fix the whole way we handle clocks with Lwt *)
-        let current_round = (IntSet.find node.consensus_states current_height).CI.round in
-        CI.debug node.node_state (Printf.sprintf "This clock was created for height %Ld and round %d; we're at height %Ld and round %d" clock_height clock_round current_height current_round);
+        let current_round =
+          (IntSet.find node.consensus_states current_height).CI.round in
+        (* CI.debug node.node_state (Printf.sprintf "This clock was created for height %Ld and round
+           %d; we're at height %Ld and round %d" clock_height clock_round current_height
+           current_round); *)
         if current_height > clock_height || current_round > clock_round then
           Lwt.return_unit
         else
-          let () = CI.debug node.node_state (Printf.sprintf "Executing the clock for step %s height %Ld round %d"
-    (CI.string_of_step clock.Clock.step) clock_height clock_round) in
+          (* let () = CI.debug node.node_state (Printf.sprintf "Executing the clock for step %s height %Ld round %d"
+             (CI.string_of_step clock.Clock.step) clock_height clock_round) in *)
           let input_log = node.input_log in
           let _ =
             add_to_input input_log clock_height clock.Clock.step CD.Timeout
@@ -213,8 +221,6 @@ and start_clock node clock_height clock_round clock =
   end
 
 let make_proposal height round block =
-  prerr_endline (Printf.sprintf "***** Making proposal for height %Ld" height);
-  prerr_endline (Printf.sprintf "***** The block has height %Ld" block.Protocol.Block.block_height);
   CI.ProposalOP (height, round, CI.block block, -1)
 
 let is_decided_on cstate (height : height) =
@@ -224,8 +230,8 @@ let is_decided_on cstate (height : height) =
   | _ -> None
 
 (** Required to publish hash on Tezos *)
-let previous_block cstate height =
-  match OutputLog.get cstate.output_log (Int64.sub height 1L) with
+let get_block_opt cstate height =
+  match OutputLog.get cstate.output_log height with
   | Some (Block b, round) -> Some (b, round)
   | _ -> None
 

@@ -16,12 +16,6 @@ let string_of_value = function
 (* TODO: FIXME: Tendermint *)
 let repr_of_value v = v
 
-let hash_of_value = function
-  | Nil ->
-    Crypto.BLAKE2B.hash ""
-  | Block b ->
-    b.hash
-
 (* FIXME: this is copied bad design. *)
 let produce_value : (State.t -> value) ref = ref (fun _ -> assert false)
 
@@ -59,7 +53,8 @@ type consensus_step =
   | Prevote
   | Precommit
 
-(** Tendermint's consensus step-communication with other nodes. *)
+(** Tendermint's consensus step-communication with other nodes. Two first fields are height and
+    round of when the operation was sent. *)
 type sidechain_consensus_op =
   | ProposalOP  of (height * round * value * round)
   | PrevoteOP   of (height * round * value)
@@ -102,7 +97,34 @@ let value_of_operation = function
   | ProposalOP (_, _, v, _)
   | PrevoteOP (_, _, v)
   | PrecommitOP (_, _, v) ->
-   v
+    v
+
+(** Hash of a consensus_op (including the step) + sender. *)
+let hash_of_consensus_op consensus_op sender =
+  let s1 = string_of_op consensus_op in
+  let s2 = Crypto.Key_hash.to_string sender in
+  Crypto.BLAKE2B.hash (s1 ^ s2)
+
+let compute_hash block_hash height round =
+  let s1 = Crypto.BLAKE2B.to_raw_string block_hash in
+  let s2 = Int64.to_string height in
+  let s3 = string_of_int round in
+  Crypto.BLAKE2B.hash (s1 ^ s2 ^ s3)
+
+(** Hash of a value+height+round. If the value is not Nil, returns the state_root_hash of the block.
+    Unlike hash_of_consensus_op, does not discriminate the steps. *)
+let hash_of_consensus_value consensus_op =
+  let height, round, value =
+    match consensus_op with
+    | ProposalOP (h, r, v, _)
+    | PrevoteOP (h, r, v)
+    | PrecommitOP (h, r, v) ->
+      (h, r, v) in
+  let hash =
+    match value with
+    | Nil -> Crypto.BLAKE2B.hash ""
+    | Block b -> b.hash in
+  compute_hash hash height round
 
 type consensus_state = {
   mutable height : height;

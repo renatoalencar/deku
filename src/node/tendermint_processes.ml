@@ -14,8 +14,8 @@ module Clock = struct
     started : bool;
   }
 
-  let make time step height round on_timeout = { time; step; on_timeout; started = false ; height ;
-  round }
+  let make time step height round on_timeout =
+    { time; step; on_timeout; started = false; height; round }
 end
 
 (* Values returned by processes, to be interpreted by the node as network
