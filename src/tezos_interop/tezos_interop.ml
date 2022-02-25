@@ -6,6 +6,7 @@ module Context = struct
     rpc_node : Uri.t;
     secret : Secret.t;
     consensus_contract : Address.t;
+    discovery_contract : Address.t;
     required_confirmations : int;
   }
 end
@@ -135,6 +136,62 @@ end = struct
         (Yojson.Safe.to_string (input_to_yojson input)) in
     match Yojson.Safe.from_string output |> output_of_yojson with
     | Ok storage -> await (Ok storage)
+    | Error error -> await (Error error)
+end
+module Fetch_big_map_validators : sig
+  val run :
+    rpc_node:Uri.t ->
+    confirmation:int ->
+    contract_address:Address.t ->
+    validators:Key_hash.t list ->
+    ((Key_hash.t * michelson) list, string) result Lwt.t
+end = struct
+  type input = {
+    rpc_node : string;
+    confirmation : int;
+    contract_address : string;
+    validators : string list;
+  }
+  [@@deriving to_yojson]
+  let output_of_yojson json =
+    let module T = struct
+      type t = { status : string } [@@deriving of_yojson { strict = false }]
+
+      and finished = { map_contents : (Key_hash.t * michelson) list }
+
+      and error = { error : string }
+    end in
+    let%ok { status } = T.of_yojson json in
+    match status with
+    | "success" ->
+      let%ok { map_contents } = T.finished_of_yojson json in
+      Ok map_contents
+    | "error" ->
+      let%ok T.{ error = errorMessage } = T.error_of_yojson json in
+      Error errorMessage
+    | _ ->
+      Error
+        "JSON output %s did not contain 'success' or 'error' for field `status`"
+  let command = "node"
+  let file =
+    let%await file, oc = Lwt_io.open_temp_file ~suffix:".js" () in
+    let%await () = Lwt_io.write oc [%blob "fetch_big_map.bundle.js"] in
+    await file
+  let file = Lwt_main.run file
+  let run ~rpc_node ~confirmation ~contract_address ~validators =
+    let input =
+      {
+        rpc_node = Uri.to_string rpc_node;
+        confirmation;
+        contract_address = Address.to_string contract_address;
+        validators = List.map Key_hash.to_string validators;
+      } in
+    let%await output =
+      Lwt_process.pmap
+        (command, [|command; file|])
+        (Yojson.Safe.to_string (input_to_yojson input)) in
+    match Yojson.Safe.from_string output |> output_of_yojson with
+    | Ok map_contents -> await (Ok map_contents)
     | Error error -> await (Error error)
 end
 module Listen_transactions = struct
@@ -328,6 +385,31 @@ module Consensus = struct
       | None -> () in
     Listen_transactions.listen ~context ~destination:context.consensus_contract
       ~on_message
+  module Key_hash_map = Map.Make_with_yojson (Crypto.Key_hash)
+  let fetch_discovery validators ~context =
+    let Context.{ rpc_node; required_confirmations; discovery_contract; _ } =
+      context in
+    let micheline_to_discovery_keys key_uri_mappings =
+      List.fold_left_ok
+        (fun acc k ->
+          match k with
+          | ( key_hash,
+              Micheline.Prim (_, D_Pair, [_; Micheline.String (_, uri)], _) ) ->
+            let uri = Uri.of_string uri in
+            Ok (Key_hash_map.add key_hash uri acc)
+          | _ -> failwith "Failed to parse storage micheline expression")
+        Key_hash_map.empty key_uri_mappings in
+    let%await micheline_storage =
+      Fetch_big_map_validators.run ~confirmation:required_confirmations
+        ~rpc_node ~contract_address:discovery_contract ~validators in
+    match micheline_storage with
+    | Error e -> Lwt.return (Error e)
+    | Ok micheline_storage ->
+      let key_uri_mappings =
+        micheline_storage
+        |> micheline_to_discovery_keys
+        |> Result.map Key_hash_map.bindings in
+      Lwt.return key_uri_mappings
   let fetch_validators ~context =
     let Context.{ rpc_node; required_confirmations; consensus_contract; _ } =
       context in
@@ -347,10 +429,14 @@ module Consensus = struct
           [] (List.rev key_hashes)
       | Ok _ -> Error "Failed to parse storage micheline expression"
       | Error msg -> Error msg in
+    (* TODO: time complexity of this function is worse than necessary *)
     let%await micheline_storage =
       Fetch_storage.run ~confirmation:required_confirmations ~rpc_node
         ~contract_address:consensus_contract in
-    Lwt.return (micheline_to_validators micheline_storage)
+    let validators = micheline_storage |> micheline_to_validators in
+    match validators with
+    | Error err -> Lwt.return (Error err)
+    | Ok validators -> fetch_discovery validators ~context
 end
 module Discovery = struct
   open Pack

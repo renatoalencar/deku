@@ -6,6 +6,7 @@
  (preprocessor_deps
   (file ./run_entrypoint.bundle.js)
   (file ./fetch_storage.bundle.js)
+  (file ./fetch_big_map.js)
   (file ./listen_transactions.bundle.js)))
 
 (rule
@@ -13,10 +14,12 @@
   ./webpack.config.js
   ./listen_transactions.js
   ./fetch_storage.js
+  ./fetch_big_map.js
   ./run_entrypoint.js)
  (targets
   ./listen_transactions.bundle.js
   ./fetch_storage.bundle.js
+  ./fetch_big_map.bundle.js
   ./run_entrypoint.bundle.js)
  (mode fallback)
  (action

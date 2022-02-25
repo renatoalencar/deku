@@ -6,6 +6,7 @@ module Context : sig
     rpc_node : Uri.t;
     secret : Secret.t;
     consensus_contract : Address.t;
+    discovery_contract : Address.t;
     required_confirmations : int;
   }
 end
@@ -36,7 +37,7 @@ module Consensus : sig
   val listen_operations :
     context:Context.t -> on_operation:(operation -> unit) -> unit
   val fetch_validators :
-    context:Context.t -> (Key_hash.t list, string) result Lwt.t
+    context:Context.t -> ((Key_hash.t * Uri.t) list, string) result Lwt.t
 end
 module Discovery : sig
   val sign : Secret.t -> nonce:int64 -> Uri.t -> Signature.t

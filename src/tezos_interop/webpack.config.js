@@ -2,6 +2,7 @@ module.exports = (env) => ({
   entry: {
     run_entrypoint: "./run_entrypoint.js",
     fetch_storage: "./fetch_storage.js",
+    fetch_big_map: "./fetch_big_map.js",
     listen_transactions: "./listen_transactions.js",
   },
   output: {
