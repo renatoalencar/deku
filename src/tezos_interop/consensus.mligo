@@ -21,13 +21,13 @@ type root_hash_storage = {
 type signatures = signature option list
 
 type root_hash_action = {
+  block_payload_hash: blake2b;
   block_height: nat;
   block_round: nat;
-  block_payload_hash: blake2b;
 
   state_hash: blake2b;
   handles_hash: blake2b;
-  (* TODO: performance, can this blown up? *)
+  (* TODO: performance, can this blow up? *)
   validators: validators;
 
   snapshotted_validator_keys: validator_keys;
@@ -145,7 +145,7 @@ let root_hash_main
     let signatures = root_hash_update.signatures in
 
     let () = root_hash_check_block_height storage block_height in
-    let () = root_hash_check_signatures root_hash_update storage signatures block_hash in
+    let () = root_hash_check_signatures root_hash_update storage signatures state_hash in
     let () = root_hash_check_keys root_hash_update storage block_hash in
 
     {

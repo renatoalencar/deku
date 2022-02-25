@@ -202,7 +202,7 @@ end
 module Consensus = struct
   open Tezos_micheline
   let commit_state_hash ~context ~block_height ~block_round ~block_payload_hash
-      ~state_hash ~handles_hash ~validators ~signatures =
+      ~checked_hash ~handles_hash ~validators ~signatures =
     let module Payload = struct
       type t = {
         block_height : int64;
@@ -210,14 +210,14 @@ module Consensus = struct
         block_payload_hash : BLAKE2B.t;
         signatures : string option list;
         handles_hash : BLAKE2B.t;
-        state_hash : BLAKE2B.t;
+        checked_hash : BLAKE2B.t;
         validators : string list;
-        current_validator_keys : string option list;
+        snapshotted_validator_keys : string option list;
       }
       [@@deriving to_yojson]
     end in
     let open Payload in
-    let current_validator_keys, signatures =
+    let snapshotted_validator_keys, signatures =
       List.map
         (fun signature ->
           match signature with
@@ -236,9 +236,9 @@ module Consensus = struct
         block_payload_hash;
         signatures;
         handles_hash;
-        state_hash;
+        checked_hash;
         validators;
-        current_validator_keys;
+        snapshotted_validator_keys;
       } in
     let%await _ =
       Run_contract.run ~context ~destination:context.Context.consensus_contract

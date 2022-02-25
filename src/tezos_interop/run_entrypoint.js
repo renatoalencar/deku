@@ -40,9 +40,13 @@ const error = (error) =>
 (async () => {
   const { rpc_node, secret, confirmation, destination, entrypoint, payload } =
     input();
-  const args = Object.entries(payload)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([_, value]) => value);
+  // FIXME: order of the fields found by trial error??
+  const storage_fields = ["block_height", "block_payload_hash", "block_round", "handles_hash",
+    "signatures", "snapshotted_validator_keys",
+    "checked_hash", "validators"];
+  const args = storage_fields.map(function(x) {
+    return payload[x];
+  });
   const Tezos = new TezosToolkit(rpc_node);
   const signer = await InMemorySigner.fromSecretKey(secret);
   Tezos.setProvider({ signer });

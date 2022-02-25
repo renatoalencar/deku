@@ -60,8 +60,6 @@ let apply_consensus_operation state consensus_operation =
   let last_seen_membership_change_timestamp = Unix.time () in
   { state with validators; last_seen_membership_change_timestamp }
 let is_next state block =
-  prerr_endline (Printf.sprintf "protocol waiting for block of height %Ld"(Int64.add
-  state.block_height 1L) );
   Int64.add state.block_height 1L = block.Block.block_height
   && state.last_block_hash = block.previous_hash
 let apply_operation (state, receipts) operation =
@@ -80,9 +78,8 @@ let apply_operation (state, receipts) operation =
     let state = apply_consensus_operation state consensus_operation in
     (state, receipts)
 let apply_block state block =
-  Printf.printf "%Ld\n%!" block.Block.block_height;
   let state, receipts =
-    List.fold_left apply_operation (state, []) block.operations in
+    List.fold_left apply_operation (state, []) block.Block.operations in
   let state =
     {
       state with
