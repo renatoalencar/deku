@@ -14,6 +14,14 @@
  (preprocess
   (pps ppx_deriving_yojson)))
 
+(executable
+ (name mock_chain)
+ (libraries node bin_common helpers cmdliner core)
+ (modules Mock_chain)
+ (public_name mock_chain)
+ (preprocess
+  (pps ppx_deriving_yojson)))
+
 (library
  (name bin_common)
  (modules Files Node_state)

@@ -175,11 +175,93 @@ let create_wallet = Term.(lwt_ret(const(create_wallet) $ const()));
 
 // create-transaction
 
+let info_create_transaction = {
+  let doc =
+    Printf.sprintf(
+      "Submits a transaction to the sidechain. The transaction will be communicated to all known validators to be included in the next block. If the path to the wallet file corresponding to the sending address is not provided, a wallet file with the correct filename (%s) must be present in the current working directory",
+      make_filename_from_address("address"),
+    );
+  Term.info(
+    "create-transaction",
+    ~version="%‌%VERSION%%",
+    ~doc,
+    ~exits,
+    ~man,
+  );
+};
+
+let create_transaction =
+    (node_folder, sender_wallet_file, payload) => {
+  open Networking;
+  let.await validators_uris = validators_uris(node_folder);
+  let validator_uri = List.hd(validators_uris);
+  let.await block_level_response = request_block_level((), validator_uri);
+  let block_level = block_level_response.level;
+  let.await wallet = Files.Wallet.read(~file=sender_wallet_file);
+  let transaction =
+    Protocol.Operation.Core_user.sign(
+      ~secret=wallet.priv_key,
+      ~nonce=0l,
+      ~block_height=block_level,
+      ~data=
+        Core.User_operation.make(
+          ~sender=wallet.address,
+          Single_operation(Yojson.Safe.from_string(payload)),
+        ),
+    );
+  let.await identity = read_identity(~node_folder);
+
+  // Broadcast transaction
+  let.await () =
+    Networking.request_user_operation_gossip(
+      {user_operation: transaction},
+      identity.uri,
+    );
+  Format.printf(
+    "operation.hash: %s\n%!",
+    BLAKE2B.to_string(transaction.hash),
+  );
+
+  Lwt.return(`Ok());
+};
+
 let folder_node = {
   let docv = "folder_node";
   let doc = "The folder where the node lives.";
   Arg.(required & pos(0, some(string), None) & info([], ~doc, ~docv));
 };
+
+let create_transaction = {
+  let address_from = {
+    let doc = "The sending address, or a path to a wallet. If a bare sending address is provided, the corresponding wallet is assumed to be in the working directory.";
+    let env = Arg.env_var("SENDER", ~doc);
+    Arg.(
+      required
+      & pos(1, some(wallet), None)
+      & info([], ~env, ~docv="sender", ~doc)
+    );
+  };
+
+  let payload = {
+    let doc = "The payload as valid JSON string.";
+    let env = Arg.env_var("PAYLOAD", ~doc);
+    Arg.(
+      required
+      & pos(2, some(string), None)
+      & info([], ~env, ~docv="payload", ~doc)
+    );
+  };
+
+  Term.(
+    lwt_ret(
+      const(create_transaction)
+      $ folder_node
+      $ address_from
+      $ payload
+    )
+  );
+};
+
 
 // sign-block
 
@@ -517,6 +599,7 @@ let () = {
     show_help,
     [
       (create_wallet, info_create_wallet),
+      (create_transaction, info_create_transaction),
       (sign_block_term, info_sign_block),
       (produce_block, info_produce_block),
       (setup_identity, info_setup_identity),

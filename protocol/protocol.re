@@ -67,8 +67,8 @@ let apply_operation = (state, operation) =>
   };
 
 let apply_block = (state, block) => {
-  Printf.printf("%Ld\n%!", block.Block.block_height);
-  let state = List.fold_left(apply_operation, state, block.operations);
+  // Printf.printf("%Ld\n%!", block.Block.block_height);
+  let state = List.fold_left(apply_operation, state, block.Block.operations);
 
   // TODO: move to function trim state
   let state = {

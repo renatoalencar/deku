@@ -193,6 +193,8 @@ let handle_trusted_validators_membership =
 let node = folder => {
   let node = Node_state.get_initial_state(~folder) |> Lwt_main.run;
   Tezos_interop.Consensus.initialize_taquito(~data_folder=folder);
+  let _ = Named_pipe.make_pipe_pair(folder ++ "/state_transition")
+  Core.State.start_state_transition_machine(~path=folder);
   let () = Node.Server.start(~initial=node);
 
   let _server =

@@ -16,10 +16,14 @@ deku_node () {
   eval $DEKU_NODE '"$@"'
 }
 
+(cd ./state_transition && go build)
+
+
 VALIDATORS=(0 1 2)
 SERVERS=()
 echo "Starting nodes."
 for i in ${VALIDATORS[@]}; do
+  cp ./state_transition/state_transition "$data_directory/$i"
   deku_node "$data_directory/$i" &
   SERVERS+=($!)
 done

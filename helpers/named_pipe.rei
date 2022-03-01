@@ -3,6 +3,9 @@
     of the second is [path] suffixed with "_write". */
 let make_pipe_pair: string => unit;
 
+let get_pipe_pair_file_descriptors:
+  string => (Unix.file_descr, Unix.file_descr);
+
 /** [get_pipe_pair_channels path] returns a pair containing input and output channels
     for the pipes created with [make_pipe_pair path]. */
 let get_pipe_pair_channels:

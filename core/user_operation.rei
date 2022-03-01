@@ -1,7 +1,7 @@
 open Crypto;
 
 type initial_operation =
-  | Single_operation(string);
+  | Single_operation(Yojson.Safe.t);
 
 [@deriving (eq, ord, yojson)]
 type t =
