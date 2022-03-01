@@ -12,6 +12,7 @@
         gopls
         gore
         ligo
+        honcho
       ]; in
       {
         devShell = (pkgs.mkShell {

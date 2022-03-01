@@ -16,10 +16,15 @@ func check(e error) {
 	}
 }
 
+func log(message string) {
+	colored := fmt.Sprintf("\x1b[%dm%s\x1b[0m\n", 31, message)
+	fmt.Printf(colored)
+}
+
 func main() {
 	state_transition := func(input []byte) {
 		var message message
-		fmt.Printf("State transition received %s\n", string(input))
+		log(fmt.Sprintf("State transition received %s", string(input)))
 		err := json.Unmarshal(input, &message)
 		check(err)
 		counter_bytes := deku_interop.Get("counter")
@@ -30,10 +35,11 @@ func main() {
 		case "Increment":
 			new_counter = *counter + 1
 			deku_interop.Set("counter", new_counter)
-			fmt.Printf("Incremented counter %d\n", new_counter)
+			log(fmt.Sprintf("Incremented counter %d", new_counter))
 		case "Decrement":
 			new_counter = *counter - 1
 			deku_interop.Set("counter", new_counter)
+			log(fmt.Sprintf("Decremented counter %d", new_counter))
 		}
 	}
 	deku_interop.Main(state_transition)
