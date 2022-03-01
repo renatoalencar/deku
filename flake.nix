@@ -7,12 +7,18 @@
   outputs = { self, nixpkgs, flake-utils, esy-fhs }:
     flake-utils.lib.eachDefaultSystem (system:
       let pkgs = import nixpkgs { inherit system; }; in
+      let extraPackages = with pkgs; [
+        go
+        gopls
+        gore
+        ligo
+      ]; in
       {
+        devShell = (pkgs.mkShell {
+          buildInputs = extraPackages;
+        });
         defaultApp = esy-fhs.lib.makeFHSApp {
-          inherit system;
-          extraPackages = with pkgs; [
-            ligo
-          ];
+          inherit system extraPackages;
         };
       }
     );
