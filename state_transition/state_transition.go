@@ -37,9 +37,11 @@ func main() {
 			deku_interop.Set("counter", new_counter)
 			log(fmt.Sprintf("Incremented counter %d", new_counter))
 		case "Decrement":
-			new_counter = *counter - 1
-			deku_interop.Set("counter", new_counter)
-			log(fmt.Sprintf("Decremented counter %d", new_counter))
+			if *counter > 0 {
+				new_counter = *counter - 1
+				deku_interop.Set("counter", new_counter)
+				log(fmt.Sprintf("Decremented counter %d", new_counter))
+			} else 
 		}
 	}
 	deku_interop.Main(state_transition)
