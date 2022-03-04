@@ -10,7 +10,7 @@ SECRET_KEY="edsk3QoqBuvdamxouPhin7swCvkQNgq4jP5KZPbwWNnwdZpSpJiEbq"
 DATA_DIRECTORY="data"
 
 sidecli() {
-  ./_build/default/src/bin/sidecli.exe "$@"
+  eval sidecli '"$@"'
 }
 
 tezos-client() {

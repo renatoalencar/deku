@@ -4,11 +4,11 @@ set -e
 data_directory="data"
 
 sidecli () {
-  ./_build/default/src/bin/sidecli.exe "$@"
+  eval sidecli '"$@"'
 }
 
 deku_node () {
-  ./_build/default/src/bin/deku_node.exe "$@"
+  eval deku-node '"$@"'
 }
 
 VALIDATORS=(0 1 2)
