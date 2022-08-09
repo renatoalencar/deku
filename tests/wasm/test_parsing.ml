@@ -17,34 +17,36 @@ let get_memory t =
   | Some _ -> Error `Execution_error
   | None -> Error `Execution_error
 
+let retard =
+  {|{ parameter (or (int %decrement) (int %increment)) ;
+storage int ;
+code { DUP ;
+       CDR ;
+       DIP { DUP } ;
+       SWAP ;
+       CAR ;
+       IF_LEFT
+         { DUP ;
+           DIP { DIP { DUP } ; SWAP } ;
+           PAIR ;
+           DUP ;
+           CDR ;
+           DIP { DUP ; CAR } ;
+           SUB ;
+           DIP { DROP 2 } }
+         { DUP ;
+           DIP { DIP { DUP } ; SWAP } ;
+           PAIR ;
+           DUP ;
+           CDR ;
+           DIP { DUP ; CAR } ;
+           ADD ;
+           DIP { DROP 2 } } ;
+       NIL operation ;
+       PAIR ;
+       DIP { DROP 2 } } }|}
+
 let test_successful_parsing () =
-  let d = Ex.x in
-  let _ =
-    let inst = Wasm.Eval.init (ref max_int) d [] in
-    let func = get_entrypoint inst |> Result.get_ok in
-    Wasm.Eval.invoke (ref max_int) func
-      [
-        Wasm.Values.Num (I32 (Int32.of_int 55));
-        Wasm.Values.Num (I32 (Int32.of_int 55));
-      ]
-    |> List.hd
-    |> function
-    | Wasm.Values.Num (I32 _res) ->
-      let _mem = get_memory inst |> Result.get_ok in
-      let tup =
-        Wasm.Memory.load_bytes _mem
-          (Int64.of_int32 @@ Int32.add _res (Int32.of_int 4))
-          4
-        |> Bytes.of_string in
-      let _ok = Bytes.get_int32_le tup 0 in
-      let tup =
-        Wasm.Memory.load_bytes _mem (Int64.of_int32 _ok) 4 |> Bytes.of_string
-      in
-      let _ok = Bytes.get_int32_le tup 0 in
-      Format.printf "%ld" _ok;
-      let _ok = _ok = Int32.of_int 34 in
-      assert (_ok = true)
-    | _ -> assert false in
   let code =
     {|
     (module

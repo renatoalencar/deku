@@ -11,5 +11,24 @@
   data-encoding
   tezos-micheline
   cstruct)
+ (modules test_helpers test_parsing test_runtime test_wasm)
+ (preprocess
+  (pps ppx_let_binding ppx_deriving_yojson ppx_cstruct ppx_deriving.show)))
+
+(executable
+ (name michelson_example)
+ (public_name michelson_example)
+ (libraries
+  wasm_vm
+  yojson
+  alcotest
+  helpers
+  tezos
+  core_deku
+  crypto
+  data-encoding
+  tezos-micheline
+  cstruct)
+ (modules michelson_example)
  (preprocess
   (pps ppx_let_binding ppx_deriving_yojson ppx_cstruct ppx_deriving.show)))
