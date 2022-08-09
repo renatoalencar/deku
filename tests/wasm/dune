@@ -26,6 +26,7 @@
   tezos
   core_deku
   crypto
+  core
   data-encoding
   tezos-micheline
   cstruct)

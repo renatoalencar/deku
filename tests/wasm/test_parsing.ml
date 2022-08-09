@@ -5,47 +5,6 @@ let parse code =
   | Ok module_ -> module_
   | Error _ -> raise Parse_error
 
-let get_entrypoint t =
-  match Wasm.Instance.export t (Wasm.Utf8.decode "entrypoint") with
-  | Some (ExternFunc func) -> Ok func
-  | Some _ -> Error `Execution_error
-  | None -> Error `Execution_error
-
-let get_memory t =
-  match Wasm.Instance.export t (Wasm.Utf8.decode "memory") with
-  | Some (ExternMemory func) -> Ok func
-  | Some _ -> Error `Execution_error
-  | None -> Error `Execution_error
-
-let retard =
-  {|{ parameter (or (int %decrement) (int %increment)) ;
-storage int ;
-code { DUP ;
-       CDR ;
-       DIP { DUP } ;
-       SWAP ;
-       CAR ;
-       IF_LEFT
-         { DUP ;
-           DIP { DIP { DUP } ; SWAP } ;
-           PAIR ;
-           DUP ;
-           CDR ;
-           DIP { DUP ; CAR } ;
-           SUB ;
-           DIP { DROP 2 } }
-         { DUP ;
-           DIP { DIP { DUP } ; SWAP } ;
-           PAIR ;
-           DUP ;
-           CDR ;
-           DIP { DUP ; CAR } ;
-           ADD ;
-           DIP { DROP 2 } } ;
-       NIL operation ;
-       PAIR ;
-       DIP { DROP 2 } } }|}
-
 let test_successful_parsing () =
   let code =
     {|
