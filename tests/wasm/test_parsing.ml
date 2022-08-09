@@ -42,7 +42,7 @@ let test_successful_parsing () =
       in
       let _ok = Bytes.get_int32_le tup 0 in
       Format.printf "%ld" _ok;
-      let _ok = _ok = Int32.of_int 0 in
+      let _ok = _ok = Int32.of_int 34 in
       assert (_ok = true)
     | _ -> assert false in
   let code =

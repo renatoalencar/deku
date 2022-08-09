@@ -20,7 +20,9 @@ let input_binary_file file =
     raise exn
 
 let x =
-  match input_binary_file "./simple_invocation.mligo.wasm" with
+  match
+    input_binary_file "./ligo_wasm_backend_output/simple_invocation.mligo.wasm"
+  with
   | { it = Module (_, { it = Script.Encoded (_, buf); at = _ }); at = _ } ->
     Decode.decode "" buf
   | _ -> assert false
