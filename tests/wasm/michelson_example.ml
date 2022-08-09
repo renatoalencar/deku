@@ -92,18 +92,19 @@ module EmptyMod = struct
   let create_empty () = Wasm.Ast.empty_module
 end
 
-let body =
-  let main_func =
-    {|
-  (func (export "main") (param $tup i32) (result i32)
-    local.get $tup
-    call $unpair
-    call $z_add
-    local.get $tup
-    call $pair
-  )
-  |}
-  in
+let body fmtr =
+  (* let main_func =
+       {|
+     (func (export "main") (param $tup i32) (result i32)
+       call $nil
+       local.get $tup
+       call $unpair
+       call $z_add
+       local.tee $tup
+       call $pair
+     )
+     |}
+     in *)
   Fmt.(
     str
       {|
@@ -111,40 +112,24 @@ let body =
   (import "env" "unpair" (func $unpair (param i32) (result i32 i32)))
   (import "env" "pair" (func $pair (param i32 i32) (result i32)))
   (import "env" "z_add" (func $z_add (param i32 i32) (result i32)))
+  (import "env" "nil" (func $nil (result i32)))
   (memory (export "memory") 1)
   %s
 )
 |}
-      main_func)
+      fmtr)
 
 module Mapper = struct
   open Tezos.Michelson.Michelson_v1_primitives
 
-  module Syntax = struct
-    open Wasm.Ast
-
-    let func var val_type instr : func' =
-      Wasm.Ast.{ ftype = var; locals = val_type; body = instr }
-  end
-
-  let z_add = 144l
-
-  let unpair = 145l
-
-  let nil = 146l
-
-  let pair = 147l
-
   let mapper (x : prim) =
     (match x with
-    | I_UNPAIR -> Wasm.Operators.call Source.(unpair @@ no_region)
-    | I_ADD -> Wasm.Operators.call Source.(z_add @@ no_region)
-    | I_NIL -> Wasm.Operators.call Source.(nil @@ no_region)
-    | I_PAIR -> Wasm.Operators.call Source.(pair @@ no_region)
+    | I_UNPAIR -> "call $unpair"
+    | I_ADD -> "call $z_add"
+    | I_NIL -> "call $nil"
+    | I_PAIR -> "call $pair"
     | _ -> assert false)
-    |> fun x ->
-    let open Source in
-    x @@ no_region
+    |> fun x -> x
 end
 
 let contract_addition =
@@ -227,12 +212,17 @@ end
 
 type values =
   | Pair : int32 * int32 -> values
+  | List : int32 list -> values
   | Num  : Z.t -> values
 
 let rec pp_values table fmt = function
   | Pair (x, y) ->
     let pp = pp_values table in
-    Format.fprintf fmt "Pair %a %a\n" pp (M.find x table) pp (M.find y table)
+    Format.fprintf fmt "(Pair %a, %a)" pp (M.find x table) pp (M.find y table)
+  | List x ->
+    let pp = pp_values table in
+    let lst = List.map (fun x -> M.find x table) x in
+    Format.fprintf fmt "List [%a]" (Fmt.list pp) lst
   | Num z -> Format.fprintf fmt "Num %s" (Z.to_string z)
 
 let incrr r = r := Int32.succ !r
@@ -266,6 +256,13 @@ let make ~gas ~module_ ~custom =
       incrr counter;
       Some [Values.Num (I32 ret)] in
     Externs.[func ([I32; I32], Some [I32]) adder] in
+  let[@warning "-8"] nil =
+    let adder _ [] =
+      empty := M.add !counter (List []) !empty;
+      let ret = !counter in
+      incrr counter;
+      Some [Values.Num (I32 ret)] in
+    Externs.[func ([], Some [I32]) adder] in
   let[@warning "-8"] unpair =
     let adder _ [Values.Num (I32 one)] =
       let[@warning "-8"] (Pair (one, two)) = M.find one !empty in
@@ -278,7 +275,7 @@ let make ~gas ~module_ ~custom =
         (Externs.to_wasm (fun () ->
              let instance = Set_once.get_exn uninit Lexing.dummy_pos in
              get_memory instance))
-      (unpair @ pair @ z_add) in
+      (unpair @ pair @ z_add @ nil) in
   let instance = Eval.init gas module_ imports in
   (* XXX: Is this the better way of doing this? *)
   Set_once.set_exn uninit Lexing.dummy_pos instance;
@@ -296,8 +293,8 @@ let exports =
     @@ no_region;
   ]
 
-let () =
-  Wasm.Parse.string_to_module body |> function
+let run fmt =
+  Wasm.Parse.string_to_module (body fmt) |> function
   | { it = Textual m; at = _ } ->
     Wasm.Print.module_ stdout 80 m;
     let instance, table =
@@ -315,50 +312,47 @@ let () =
     ()
   | _ -> assert false
 
-(* let () =
-   let open Tezos_micheline in
-   let ff =
-     let r, _ = Micheline_parser.tokenize contract_addition in
-     let r, _ = Micheline_parser.parse_expression r in
-     let r = Micheline.strip_locations r |> Micheline.root in
-     r in
-   let[@warning "-33"] _ =
-     let open Tezos.Michelson.Michelson_v1_primitives in
-     match ff with
-     | Seq (_, [Prim _; Prim _; Prim (_, "code", [Seq (_, nodes)], _)]) ->
-       let nodes =
-         List.map
-           (fun x ->
-             Tezos_micheline.Micheline.map_node Fun.id (fun x ->
-                 Tezos.Michelson.Michelson_v1_primitives.prim_of_string x
-                 |> Result.get_ok)
-             @@ Micheline.root
-             @@ Micheline.strip_locations x)
-           nodes in
-       let result =
-         List.concat_map
-           (fun x ->
-             let open Micheline in
-             match x with
-             | Prim (_, prim, _, _) -> [Mapper.mapper prim]
-             (* | Int (_, x) ->
-                let open Wasm.Script in
-                let open Source in
-                Ast.Val (Values.Ref (ExternRef x @@ no_region) @@ no_region) *)
-             | _ -> assert false)
-           nodes in
-       let open Source in
-       let generated =
-         Mapper.Syntax.func
-           (Int32.of_int 0 @@ no_region)
-           [Types.RefType Types.ExternRefType]
-           ([Operators.local_get (0l @@ no_region) @@ no_region] @ result) in
-       let empty_module = EmptyMod.create_empty () in
-       Wasm.Print.module_ stdout 80
-         Source.
-           {
-             it = { empty_module with funcs = [generated @@ no_region]; exports };
-             at = no_region;
-           }
-     | _ -> assert false in
-   () *)
+let () =
+  let open Tezos_micheline in
+  let ff =
+    let r, _ = Micheline_parser.tokenize contract_addition in
+    let r, _ = Micheline_parser.parse_expression r in
+    let r = Micheline.strip_locations r |> Micheline.root in
+    r in
+  let[@warning "-33"] ff =
+    let open Tezos.Michelson.Michelson_v1_primitives in
+    match ff with
+    | Seq (_, [Prim _; Prim _; Prim (_, "code", [Seq (_, nodes)], _)]) ->
+      let nodes =
+        List.map
+          (fun x ->
+            Tezos_micheline.Micheline.map_node Fun.id (fun x ->
+                Tezos.Michelson.Michelson_v1_primitives.prim_of_string x
+                |> Result.get_ok)
+            @@ Micheline.root
+            @@ Micheline.strip_locations x)
+          nodes in
+      let result =
+        List.map
+          (fun x ->
+            let open Micheline in
+            match x with
+            | Prim (_, prim, _, _) -> Mapper.mapper prim
+            (* | Int (_, x) ->
+               let open Wasm.Script in
+               let open Source in
+               Ast.Val (Values.Ref (ExternRef x @@ no_region) @@ no_region) *)
+            | _ -> assert false)
+          nodes in
+      Format.asprintf
+        {| 
+        (func (export "main") (param $tup i32) (result i32)
+           %a
+         )
+      |}
+        (Format.pp_print_list
+           ~pp_sep:(fun fmt () -> Format.fprintf fmt "\n")
+           Fmt.string)
+        (["local.get 0"] @ result)
+    | _ -> assert false in
+  run ff
