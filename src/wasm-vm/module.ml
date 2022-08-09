@@ -100,7 +100,6 @@ let encode t =
 let decode t =
   try
     let decoded = Decode.decode "" t in
-    Valid.check_module decoded;
     let () = validate ~gas:(ref max_int) decoded in
     Ok decoded
   with

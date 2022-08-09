@@ -1,5 +1,15 @@
 (test
  (name test_wasm)
- (libraries wasm_vm yojson alcotest helpers tezos core_deku crypto)
+ (libraries
+  wasm_vm
+  yojson
+  alcotest
+  helpers
+  tezos
+  core_deku
+  crypto
+  data-encoding
+  tezos-micheline
+  cstruct)
  (preprocess
-  (pps ppx_let_binding ppx_deriving_yojson)))
+  (pps ppx_let_binding ppx_deriving_yojson ppx_cstruct ppx_deriving.show)))

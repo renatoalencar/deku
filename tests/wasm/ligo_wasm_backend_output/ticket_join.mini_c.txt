@@ -1,0 +1,54 @@
+let poly_join_tickets_1 =
+  fun t#35 ->
+  (((
+  (local.tee "__ticket_tuple")
+  (local.get "__ticket_tuple")
+  (i32.const 4)
+  (i32.add)
+  (call $ffi_join_tickets)
+  (local.tee "__joined_tickets")
+  (if
+    (result i32)
+    (then (local.get "__joined_tickets") (i32.load))
+    (else (i32.const 0))
+  )
+)
+)@(t#35))[@inline] in
+let poly_create_ticket_3 =
+  fun v#37 ->
+  (fun n#38 ->
+   (((
+  (local.tee "__ticket")
+  (i32.load)
+  (local.get "__ticket")
+  (i32.const 4)
+  (i32.add)
+  (i64.load32_u)
+  (call $ffi_mint_ticket)
+)
+)@(
+    PAIR(v#37 , n#38))))[@inline] in
+let poly_create_ticket_2 =
+  fun v#37 ->
+  (fun n#38 ->
+   (((
+  (local.tee "__ticket")
+  (i32.load)
+  (local.get "__ticket")
+  (i32.const 4)
+  (i32.add)
+  (i64.load32_u)
+  (call $ffi_mint_ticket)
+)
+)@(
+    PAIR(v#37 , n#38))))[@inline] in
+let main =
+  fun gen#40 ->
+  (let (gen#46, gen#47) = gen#40 in
+   let _#41 = gen#46 in
+   let _#42 = gen#47 in
+   let a#43 = ((poly_create_ticket_3)@(L(1)))@(L(+10)) in
+   let b#44 = ((poly_create_ticket_2)@(L(1)))@(L(+10)) in
+   let _joined#45 = (poly_join_tickets_1)@(PAIR(a#43 , b#44)) in
+   PAIR(LIST_EMPTY() , L(0))) in
+main : ((int * int)) -> ((list(operation) * int))

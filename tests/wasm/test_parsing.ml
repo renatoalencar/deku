@@ -5,7 +5,46 @@ let parse code =
   | Ok module_ -> module_
   | Error _ -> raise Parse_error
 
+let get_entrypoint t =
+  match Wasm.Instance.export t (Wasm.Utf8.decode "entrypoint") with
+  | Some (ExternFunc func) -> Ok func
+  | Some _ -> Error `Execution_error
+  | None -> Error `Execution_error
+
+let get_memory t =
+  match Wasm.Instance.export t (Wasm.Utf8.decode "memory") with
+  | Some (ExternMemory func) -> Ok func
+  | Some _ -> Error `Execution_error
+  | None -> Error `Execution_error
+
 let test_successful_parsing () =
+  let d = Ex.x in
+  let _ =
+    let inst = Wasm.Eval.init (ref max_int) d [] in
+    let func = get_entrypoint inst |> Result.get_ok in
+    Wasm.Eval.invoke (ref max_int) func
+      [
+        Wasm.Values.Num (I32 (Int32.of_int 55));
+        Wasm.Values.Num (I32 (Int32.of_int 55));
+      ]
+    |> List.hd
+    |> function
+    | Wasm.Values.Num (I32 _res) ->
+      let _mem = get_memory inst |> Result.get_ok in
+      let tup =
+        Wasm.Memory.load_bytes _mem
+          (Int64.of_int32 @@ Int32.add _res (Int32.of_int 4))
+          4
+        |> Bytes.of_string in
+      let _ok = Bytes.get_int32_le tup 0 in
+      let tup =
+        Wasm.Memory.load_bytes _mem (Int64.of_int32 _ok) 4 |> Bytes.of_string
+      in
+      let _ok = Bytes.get_int32_le tup 0 in
+      Format.printf "%ld" _ok;
+      let _ok = _ok = Int32.of_int 0 in
+      assert (_ok = true)
+    | _ -> assert false in
   let code =
     {|
     (module
